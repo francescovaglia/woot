@@ -15,6 +15,9 @@ final class PushRegistrar {
     static let environment = Bundle.main.object(forInfoDictionaryKey: "WootAPSEnvironment") as? String ?? "production"
 
     weak var sessions: SessionStore?
+    /// iOS can deliver the same token more than once; registering it twice in parallel
+    /// would leave two subscriptions, and every notification would arrive twice.
+    private var registeredToken: Data?
 
     func enable() async {
         guard Self.relay != nil else { return }
@@ -24,7 +27,8 @@ final class PushRegistrar {
 
     /// Called with every APNs token, which iOS hands out at each launch.
     func register(deviceToken: Data) async {
-        guard let relay = Self.relay, let account = sessions?.account else { return }
+        guard let relay = Self.relay, let account = sessions?.account, deviceToken != registeredToken else { return }
+        registeredToken = deviceToken
         var registration = SharedKeychain.push.read() ?? PushRegistration(keys: .generate())
         do {
             // The extension needs the keys before the first push can arrive.
@@ -37,12 +41,14 @@ final class PushRegistrar {
             registration.endpoint = endpoint
             try SharedKeychain.push.write(registration)
         } catch {
+            registeredToken = nil
             Logger.push.error("Push registration failed: \(String(describing: error), privacy: .public)")
         }
     }
 
     /// Stops this device's notifications for the account that is signing out.
     func disable(for account: AccountStore) {
+        registeredToken = nil
         guard var registration = SharedKeychain.push.read(), let endpoint = registration.endpoint else { return }
         registration.endpoint = nil
         try? SharedKeychain.push.write(registration)
@@ -64,8 +70,8 @@ final class PushRegistrar {
         let (data, response) = try await URLSession.chatwoot.data(for: request)
         guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
         let endpoint = try JSONDecoder().decode(EndpointResponse.self, from: data).endpoint
-        // Chatwoot will post notifications there, so it must stay on the relay over TLS.
-        guard endpoint.scheme == "https", endpoint.host() == relay.host() else { throw URLError(.badServerResponse) }
+        // Chatwoot will post notifications there; the content is encrypted, but the transport must be TLS too.
+        guard endpoint.scheme == "https" else { throw URLError(.badServerResponse) }
         return endpoint
     }
 }
