@@ -73,7 +73,7 @@ Cloudflare Workers' free plan:
 3. Put the Worker's address in `Config/Local.xcconfig` as `WOOT_PUSH_RELAY` and build the app.
 
 Keep `RELAY_SECRET` stable: changing it invalidates every endpoint until apps register again,
-which they do at each launch. Without `WOOT_PUSH_RELAY`, the app builds with notifications off.
+which they do at each launch. With an empty `WOOT_PUSH_RELAY`, the app builds with notifications off.
 
 ## Building
 

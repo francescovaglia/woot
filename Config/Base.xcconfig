@@ -6,7 +6,8 @@ WOOT_BUNDLE_ID = io.tild.woot
 WOOT_APS_ENVIRONMENT = production
 WOOT_APS_ENVIRONMENT[config=Debug] = development
 
-// The woot-push relay; empty turns notifications off. In xcconfig "//" starts a
-// comment, so URLs are written as https:/$()/host.
-WOOT_PUSH_RELAY =
+// The woot-push relay. This one only delivers to io.tild.woot: with your own bundle id,
+// point it at your own relay in Local.xcconfig, or leave it empty to turn notifications off.
+// In xcconfig "//" starts a comment, so URLs are written as https:/$()/host.
+WOOT_PUSH_RELAY = https:/$()/woot-push.tild.workers.dev
 #include? "Local.xcconfig"
