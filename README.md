@@ -102,6 +102,30 @@ WOOT_LIVE_SERVER=https://chat.example.com WOOT_LIVE_TOKEN=<token> swift test --f
 The UI tests need the same values, passed to the test runner with the `TEST_RUNNER_` prefix.
 They open conversations and type in private-note mode, so contacts never see a typing indicator.
 
+## Roadmap
+
+Planned, roughly in order. Ideas and pull requests are welcome.
+
+**Working a conversation**
+- Assign to an agent or team, snooze, and add labels.
+- Canned responses in the composer.
+- Edit contact details.
+
+**Notifications**
+- Choose what Chatwoot notifies you about, from the app's settings.
+- Communication notifications with the contact's avatar, and a Resolve action next to Reply.
+- Unread count on the app icon.
+
+**Accounts**
+- Several accounts and servers, with a switcher.
+
+**Privacy and quality**
+- Hide conversation content in the app switcher.
+- Unit tests for the stores, against a fake API.
+
+**Release**
+- App Store release under a new name, with screenshots and a demo account.
+
 ## License
 
 MIT, see [LICENSE](LICENSE).
