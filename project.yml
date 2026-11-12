@@ -20,7 +20,15 @@ targets:
   Woot:
     type: application
     platform: iOS
-    sources: [Woot]
+    sources:
+      # The .icon is a folder package: without the exclude, XcodeGen walks into it
+      # and adds its files one by one instead of the icon itself.
+      - path: Woot
+        excludes:
+          - "Resources/AppIcon.icon"
+      - path: Woot/Resources/AppIcon.icon
+        type: file
+        buildPhase: resources
     dependencies:
       - package: WootKit
         product: ChatwootModels
