@@ -1,0 +1,14 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "woot-push",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-01",
+  "observability": { "enabled": true },
+  "ratelimits": [
+    { "name": "PUSH_LIMIT", "namespace_id": "1001", "simple": { "limit": 60, "period": 60 } }
+  ],
+  "vars": {
+    // The app's bundle id. Pushes for any other app are refused by Apple.
+    "APNS_TOPIC": "com.example.woot"
+  }
+}

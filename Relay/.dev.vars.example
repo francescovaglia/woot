@@ -1,0 +1,9 @@
+# The full contents of your APNs auth key (.p8), from developer.apple.com > Keys,
+# with Apple Push Notifications service enabled.
+APNS_KEY=
+# The 10 character Key ID shown next to the key.
+APNS_KEY_ID=
+# Your Apple Developer Team ID.
+APNS_TEAM_ID=
+# 32 random bytes in base64, for example from: openssl rand -base64 32
+RELAY_SECRET=
