@@ -28,7 +28,7 @@ Packages/WootKit        Swift package, no dependencies
 Woot/                   The app: one @Observable store per screen, SwiftUI views
 WootNotifications/      Notification service extension
 Shared/                 Code both of them use: keychain items, payload keys
-Relay/                  woot-push, the server that hands notifications to APNs
+Relay/                  woot-push, the Cloudflare Worker that hands notifications to APNs
 WootUITests/            End-to-end checks against a real server
 ```
 
@@ -54,19 +54,26 @@ Chatwoot ──Web Push, encrypted to the device──▶ woot-push ──▶ AP
    without being able to read it, and answers `410` once the app is gone so Chatwoot drops it.
 4. The extension decrypts it, then fetches the contact's name and message from your server.
 
-Push needs a relay signed with the APNs key of the team that ships the app. To run your own:
+Apple only accepts pushes for an app signed with the APNs key of the team that ships it, so the
+App Store build uses our relay. The relay can't read what it carries, and its code is the
+Worker in `Relay/`.
 
-```sh
-cd Relay && docker build -t woot-push .
-docker run -p 8080:8080 \
-  -e APNS_KEY="$(cat AuthKey_XXXXXXXXXX.p8)" -e APNS_KEY_ID=XXXXXXXXXX -e APNS_TEAM_ID=ABCDE12345 \
-  -e APNS_TOPIC=com.example.woot -e RELAY_SECRET="$(openssl rand -base64 32)" \
-  -e PUBLIC_URL=https://push.example.com woot-push
-```
+### Run your own relay
+
+If you build Woot with your own Apple developer account, you can run your own relay on
+Cloudflare Workers' free plan:
+
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/francescovaglia/woot/tree/main/Relay)
+
+1. In [Apple Developer > Keys](https://developer.apple.com/account/resources/authkeys/list), create a key
+   with Apple Push Notifications service enabled and download the `.p8` file.
+2. Press the button. When asked, paste the contents of the `.p8` as `APNS_KEY`, its Key ID as `APNS_KEY_ID`,
+   your Team ID as `APNS_TEAM_ID`, your app's bundle id as `APNS_TOPIC`, and the output of
+   `openssl rand -base64 32` as `RELAY_SECRET`.
+3. Put the Worker's address in `Config/Local.xcconfig` as `WOOT_PUSH_RELAY` and build the app.
 
 Keep `RELAY_SECRET` stable: changing it invalidates every endpoint until apps register again,
-which they do at each launch. Then set `WOOT_PUSH_RELAY` in `Config/Local.xcconfig`.
-Without it, the app builds with notifications off.
+which they do at each launch. Without `WOOT_PUSH_RELAY`, the app builds with notifications off.
 
 ## Building
 
@@ -83,7 +90,7 @@ open Woot.xcodeproj
 
 ```sh
 cd Packages/WootKit && swift test
-cd Relay && swift test
+cd Relay && npm install && npm test
 ```
 
 Two suites talk to a real server and are skipped unless you provide one. They only read data.
