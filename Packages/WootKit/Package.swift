@@ -8,14 +8,16 @@ let package = Package(
         .library(name: "ChatwootModels", targets: ["ChatwootModels"]),
         .library(name: "ChatwootAPI", targets: ["ChatwootAPI"]),
         .library(name: "ChatwootRealtime", targets: ["ChatwootRealtime"]),
+        .library(name: "ChatwootPush", targets: ["ChatwootPush"]),
     ],
     targets: [
         .target(name: "ChatwootModels"),
         .target(name: "ChatwootAPI", dependencies: ["ChatwootModels"]),
         .target(name: "ChatwootRealtime", dependencies: ["ChatwootModels"]),
+        .target(name: "ChatwootPush"),
         .testTarget(
             name: "WootKitTests",
-            dependencies: ["ChatwootModels", "ChatwootAPI", "ChatwootRealtime"],
+            dependencies: ["ChatwootModels", "ChatwootAPI", "ChatwootRealtime", "ChatwootPush"],
             resources: [.copy("Fixtures")]
         ),
     ]

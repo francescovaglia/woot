@@ -76,6 +76,37 @@ extension Endpoint where Response == Profile {
     public static var profile: Endpoint<Profile> { Endpoint(.get, "api/v1/profile") }
 }
 
+/// Asks Chatwoot to deliver this user's notifications as Web Push to `endpoint`.
+/// Chatwoot decides what to send from the user's own notification settings.
+public struct PushSubscription: Sendable, Equatable {
+    public let endpoint: URL
+    public let p256dh: String
+    public let auth: String
+
+    public init(endpoint: URL, p256dh: String, auth: String) {
+        self.endpoint = endpoint
+        self.p256dh = p256dh
+        self.auth = auth
+    }
+}
+
+extension Endpoint where Response == Void {
+    public static func subscribe(_ subscription: PushSubscription) -> Endpoint<Void> {
+        let endpoint = subscription.endpoint.absoluteString
+        return Endpoint(.post, "api/v1/notification_subscriptions", body: .json(SubscriptionBody(
+            notification_subscription: .init(
+                subscription_type: "browser_push",
+                // Chatwoot only unsubscribes by `push_token`, so the endpoint doubles as one.
+                subscription_attributes: ["endpoint": endpoint, "p256dh": subscription.p256dh, "auth": subscription.auth, "push_token": endpoint]
+            )
+        )))
+    }
+
+    public static func unsubscribe(endpoint: URL) -> Endpoint<Void> {
+        Endpoint(.delete, "api/v1/notification_subscriptions", query: [URLQueryItem(name: "push_token", value: endpoint.absoluteString)])
+    }
+}
+
 /// A conversation found by search. Lighter than `Conversation`: open it by `id`.
 public struct ConversationSearchHit: Identifiable, Hashable, Sendable, Decodable {
     public let id: Int
@@ -240,4 +271,13 @@ private struct AvailabilityBody: Encodable {
     }
 
     let profile: Profile
+}
+
+private struct SubscriptionBody: Encodable {
+    struct Subscription: Encodable {
+        let subscription_type: String
+        let subscription_attributes: [String: String]
+    }
+
+    let notification_subscription: Subscription
 }

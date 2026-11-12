@@ -4,6 +4,7 @@ import SwiftUI
 
 struct InboxView: View {
     @Environment(AccountStore.self) private var account
+    @Environment(SessionStore.self) private var sessions
     @State private var path: [Int] = []
     @State private var showsSettings = false
 
@@ -25,6 +26,12 @@ struct InboxView: View {
                 ConversationScreen(id: id)
             }
             .sheet(isPresented: $showsSettings) { SettingsView() }
+        }
+        .onChange(of: sessions.requestedConversation, initial: true) { _, id in
+            guard let id else { return }
+            sessions.requestedConversation = nil
+            showsSettings = false
+            if path.last != id { path = [id] }
         }
     }
 

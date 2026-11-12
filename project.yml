@@ -30,6 +30,19 @@ targets:
       - path: Woot/Resources/AppIcon.icon
         type: file
         buildPhase: resources
+      - Shared
+    info:
+      path: Woot/Info.plist
+      properties:
+        WootKeychainGroup: $(AppIdentifierPrefix)$(WOOT_BUNDLE_ID).shared
+        WootPushRelay: $(WOOT_PUSH_RELAY)
+        WootAPSEnvironment: $(WOOT_APS_ENVIRONMENT)
+    entitlements:
+      path: Woot/Woot.entitlements
+      properties:
+        aps-environment: $(WOOT_APS_ENVIRONMENT)
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)$(WOOT_BUNDLE_ID).shared
     dependencies:
       - package: WootKit
         product: ChatwootModels
@@ -37,6 +50,9 @@ targets:
         product: ChatwootAPI
       - package: WootKit
         product: ChatwootRealtime
+      - package: WootKit
+        product: ChatwootPush
+      - target: WootNotifications
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(WOOT_BUNDLE_ID)
@@ -51,6 +67,36 @@ targets:
         TARGETED_DEVICE_FAMILY: "1,2"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ENABLE_PREVIEWS: YES
+  WootNotifications:
+    type: app-extension
+    platform: iOS
+    sources: [WootNotifications, Shared]
+    info:
+      path: WootNotifications/Info.plist
+      properties:
+        CFBundleDisplayName: Woot Notifications
+        WootKeychainGroup: $(AppIdentifierPrefix)$(WOOT_BUNDLE_ID).shared
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.usernotifications.service
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService
+    entitlements:
+      path: WootNotifications/WootNotifications.entitlements
+      properties:
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)$(WOOT_BUNDLE_ID).shared
+    dependencies:
+      - package: WootKit
+        product: ChatwootModels
+      - package: WootKit
+        product: ChatwootAPI
+      - package: WootKit
+        product: ChatwootPush
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(WOOT_BUNDLE_ID).notifications
+        GENERATE_INFOPLIST_FILE: YES
+        # The system calls the extension off the main thread.
+        SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated
   WootUITests:
     type: bundle.ui-testing
     platform: iOS

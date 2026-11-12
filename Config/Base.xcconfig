@@ -1,4 +1,12 @@
 // Signing is personal, so it lives in Local.xcconfig, which git ignores.
 // Copy Local.example.xcconfig to Local.xcconfig and set your own team and bundle id.
 WOOT_BUNDLE_ID = io.tild.woot
+
+// Debug builds get sandbox APNs tokens, everything else production ones.
+WOOT_APS_ENVIRONMENT = production
+WOOT_APS_ENVIRONMENT[config=Debug] = development
+
+// The woot-push relay; empty turns notifications off. In xcconfig "//" starts a
+// comment, so URLs are written as https:/$()/host.
+WOOT_PUSH_RELAY =
 #include? "Local.xcconfig"

@@ -2,12 +2,12 @@ import SwiftUI
 
 @main
 struct WootApp: App {
-    @State private var sessions = SessionStore()
+    @UIApplicationDelegateAdaptor private var delegate: AppDelegate
 
     var body: some Scene {
         WindowGroup {
             RootView()
-                .environment(sessions)
+                .environment(delegate.sessions)
         }
     }
 }

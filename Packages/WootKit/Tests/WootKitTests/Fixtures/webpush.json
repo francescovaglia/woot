@@ -1,0 +1,7 @@
+{
+  "privateKey": "zZs_q37p13scnFsjnomdmnuOWsAarTevbA1ksHJU0MI",
+  "p256dh": "BJJj-ZNMzGuGmjWsScN05Ii_K_AKDUhOudpVQYO0z7gfHRG20YwkslweE-zh1xzAI3BLIpRQ4OTPXfl_zTnK7qE",
+  "auth": "a8a2kZNdGr5w_LoK6-3Q5A",
+  "body": "CU4gKXxasQFgrjNkDRPrhgAAALpBBLsVSj0MU0fIj62TKWe/a8+cPHQIzdJbgqb+3zx+YcJtKyLbn7utf3PYfvpOGImm+Bwp9cY8eJ71UsdQvvypBJBKb86s1+wT3ZOZCYsSaOfIoB7FqLNRXQ7fDz0LyU4thwgR38OwptFApyMtDWM/6ITEirPHFUIlGhUm5I20LEV+V5WosHEcevoRwTnLpUoDGYL887JLd4lGfcYfzsFr22FxO/KZ2LyWKyDtbWkKN18EO906DhFbzN5T/6yiKO/CJhODb+vlTMxnFqiBHVwfJMUwUiY0UHL17jhwdrPtuyvqWtxGp7U957dBUA18NE3lal/VW7BeL3zPwkg=",
+  "plaintext": "{\"title\":\"A new message is created in conversation #42\",\"tag\":\"assigned_conversation_new_message_42_7\",\"url\":\"https://chat.example.com/app/accounts/3/conversations/42\"}"
+}

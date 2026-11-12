@@ -54,7 +54,7 @@ struct ConversationRow: View {
     @ViewBuilder
     private var preview: some View {
         if let message = conversation.lastMessage {
-            let text = message.text ?? message.attachments.first.map(Self.describe) ?? ""
+            let text = message.text ?? message.attachments.first?.summary ?? ""
             if message.isPrivate {
                 Text("\(Image(systemName: "note.text")) \(text)")
             } else if message.kind == .outgoing {
@@ -64,16 +64,6 @@ struct ConversationRow: View {
             }
         } else {
             Text("No messages yet").italic()
-        }
-    }
-
-    private static func describe(_ attachment: Attachment) -> String {
-        switch attachment.kind {
-        case .image: String(localized: "Photo")
-        case .video: String(localized: "Video")
-        case .audio: String(localized: "Audio")
-        case .location: String(localized: "Location")
-        default: attachment.fileName
         }
     }
 }
