@@ -1,0 +1,15 @@
+{
+  "access_token": "token-123",
+  "account_id": 7,
+  "available_name": "Alex",
+  "avatar_url": "",
+  "email": "alex@example.com",
+  "id": 1,
+  "name": "Alex Moreau",
+  "pubsub_token": "pubsub-abc",
+  "role": "administrator",
+  "accounts": [
+    { "id": 3, "name": "Side project", "role": "agent", "availability": "offline", "availability_status": "offline" },
+    { "id": 7, "name": "Acme", "role": "administrator", "availability": "online", "availability_status": "offline", "api_and_webhooks": true }
+  ]
+}

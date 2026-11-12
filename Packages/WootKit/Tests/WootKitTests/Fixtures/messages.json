@@ -1,0 +1,35 @@
+{
+  "meta": { "contact": { "id": 42, "name": "Maya Patel" }, "agent_last_seen_at": "2026-11-12T15:42:22.505Z" },
+  "payload": [
+    {
+      "id": 1603, "content": "Can I export a PDF report?", "inbox_id": 2, "conversation_id": 511,
+      "message_type": 0, "content_type": "text", "status": "sent", "content_attributes": {},
+      "created_at": 1794495535, "private": false, "source_id": null,
+      "sender": { "id": 42, "name": "Maya Patel", "thumbnail": "", "type": "contact", "email": "maya@example.com" }
+    },
+    {
+      "id": 1604, "content": "Draft: open the profile, then Export PDF Report.", "inbox_id": 2, "conversation_id": 511,
+      "message_type": 1, "content_type": "text", "status": "read", "content_attributes": {},
+      "created_at": 1794495622, "private": true,
+      "sender": { "id": 1, "name": "Alex Moreau", "available_name": "Alex", "avatar_url": "https://chat.example.com/avatar.png", "type": "user", "availability_status": "online", "thumbnail": "" }
+    },
+    {
+      "id": 1605, "content": null, "conversation_id": 511, "message_type": 1, "status": "delivered",
+      "created_at": 1794495700, "private": false, "content_attributes": {},
+      "sender": { "id": 1, "name": "Alex Moreau", "type": "user" },
+      "attachments": [
+        { "id": 9, "message_id": 1605, "file_type": "image", "account_id": 1, "extension": "png", "content_type": "image/png",
+          "data_url": "https://chat.example.com/rails/active_storage/blobs/redirect/abc/export%20menu.png",
+          "thumb_url": "https://chat.example.com/thumb.png", "file_size": 48213, "width": 1170, "height": 2532 }
+      ]
+    },
+    {
+      "id": 1606, "content": "Conversation was marked resolved by Alex", "conversation_id": 511,
+      "message_type": 2, "created_at": 1794495800, "private": false, "content_attributes": {}
+    },
+    {
+      "id": 1607, "content": "Removed", "conversation_id": 511, "message_type": 0, "created_at": 1794495801,
+      "private": false, "content_attributes": { "deleted": true }
+    }
+  ]
+}

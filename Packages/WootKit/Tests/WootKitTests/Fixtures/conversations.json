@@ -1,0 +1,90 @@
+{
+  "data": {
+    "meta": { "mine_count": 1, "assigned_count": 1, "unassigned_count": 1, "all_count": 2 },
+    "payload": [
+      {
+        "meta": {
+          "sender": {
+            "additional_attributes": { "city": "Leeds", "country": "United Kingdom", "country_code": "gb" },
+            "availability_status": "online",
+            "email": "maya@example.com",
+            "id": 42,
+            "name": "Maya Patel",
+            "phone_number": null,
+            "thumbnail": "",
+            "custom_attributes": { "plan": "Pro", "seats": 3 },
+            "last_activity_at": 1794495535,
+            "created_at": 1794400000
+          },
+          "assignee": {
+            "id": 1,
+            "name": "Alex Moreau",
+            "available_name": "Alex",
+            "avatar_url": "https://chat.example.com/avatar.png",
+            "type": "user",
+            "availability_status": "online",
+            "thumbnail": "https://chat.example.com/avatar.png"
+          },
+          "assignee_type": "User",
+          "channel": "Channel::WebWidget",
+          "hmac_verified": false
+        },
+        "id": 511,
+        "messages": [],
+        "account_id": 1,
+        "inbox_id": 2,
+        "labels": ["billing"],
+        "status": "open",
+        "can_reply": true,
+        "agent_last_seen_at": 1794495600,
+        "contact_last_seen_at": 0,
+        "created_at": 1794495535,
+        "updated_at": 1794495796.910361,
+        "timestamp": 1794495793,
+        "unread_count": 2,
+        "last_activity_at": 1794495793,
+        "last_non_activity_message": {
+          "id": 1609,
+          "content": "Can I export a PDF report?",
+          "account_id": 1,
+          "inbox_id": 2,
+          "conversation_id": 511,
+          "message_type": 0,
+          "created_at": 1794495793,
+          "updated_at": "2026-11-12T15:03:16.979Z",
+          "private": false,
+          "status": "sent",
+          "content_type": "text",
+          "content_attributes": {},
+          "sender_type": "Contact",
+          "sender_id": 42,
+          "sender": { "id": 42, "name": "Maya Patel", "thumbnail": "", "type": "contact" }
+        }
+      },
+      {
+        "meta": {
+          "sender": { "id": 43, "name": "withered-darkness-514", "thumbnail": "", "additional_attributes": {}, "custom_attributes": {} },
+          "channel": "Channel::Api"
+        },
+        "id": 510,
+        "account_id": 1,
+        "inbox_id": 2,
+        "status": "resolved",
+        "created_at": 1794400000,
+        "last_activity_at": 1794400100,
+        "unread_count": 0,
+        "messages": [
+          {
+            "id": 1500,
+            "content": "Thanks, all good!",
+            "conversation_id": 510,
+            "message_type": 0,
+            "created_at": 1794400100,
+            "private": false,
+            "status": "sent"
+          }
+        ]
+      }
+    ]
+  }
+}
