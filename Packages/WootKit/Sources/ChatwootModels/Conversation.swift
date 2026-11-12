@@ -10,13 +10,13 @@ public struct Conversation: Identifiable, Hashable, Sendable {
     public let inboxID: Int
     public var status: Status
     public let contact: Contact
-    public let assignee: Participant?
-    public let lastMessage: Message?
+    public var assignee: Participant?
+    public var lastMessage: Message?
     public var unreadCount: Int
-    public let lastActivityAt: Date
+    public var lastActivityAt: Date
     public let createdAt: Date
-    public let agentLastSeenAt: Date?
-    public let contactLastSeenAt: Date?
+    public var agentLastSeenAt: Date?
+    public var contactLastSeenAt: Date?
     public let labels: [String]
     public let canReply: Bool
 

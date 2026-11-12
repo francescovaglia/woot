@@ -48,7 +48,7 @@ extension ChatwootClient {
         let credential = Credential.apiToken(accessToken)
         let client = ChatwootClient(server: server, credential: credential, urlSession: urlSession)
         do {
-            let profile = try await client.send(Endpoint<Profile>(.get, "api/v1/profile"))
+            let profile = try await client.send(.profile)
             return try .signedIn(Self.session(server: server, credential: credential, profile: profile), profile)
         } catch .unauthorized {
             throw .invalidCredentials

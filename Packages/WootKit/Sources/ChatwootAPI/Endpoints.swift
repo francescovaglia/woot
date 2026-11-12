@@ -71,6 +71,10 @@ public struct OutgoingMessage: Sendable {
     }
 }
 
+extension Endpoint where Response == Profile {
+    public static var profile: Endpoint<Profile> { Endpoint(.get, "api/v1/profile") }
+}
+
 /// The REST calls Woot makes, scoped to one account.
 public struct AccountAPI: Sendable {
     public let accountID: Int
