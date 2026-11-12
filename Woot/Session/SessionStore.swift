@@ -9,7 +9,7 @@ import OSLog
 final class SessionStore {
     private(set) var account: AccountStore?
 
-    private let keychain = KeychainItem<ChatwootSession>(service: "io.tild.woot", account: "session")
+    private let keychain = KeychainItem<ChatwootSession>(service: Bundle.main.bundleIdentifier ?? "woot", account: "session")
 
     init() {
         if let session = keychain.read() {
@@ -35,7 +35,8 @@ final class SessionStore {
 }
 
 extension Logger {
-    static let session = Logger(subsystem: "io.tild.woot", category: "session")
-    static let realtime = Logger(subsystem: "io.tild.woot", category: "realtime")
-    static let api = Logger(subsystem: "io.tild.woot", category: "api")
+    private static let subsystem = Bundle.main.bundleIdentifier ?? "woot"
+    static let session = Logger(subsystem: subsystem, category: "session")
+    static let realtime = Logger(subsystem: subsystem, category: "realtime")
+    static let api = Logger(subsystem: subsystem, category: "api")
 }

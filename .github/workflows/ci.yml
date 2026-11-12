@@ -1,0 +1,23 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select the newest Xcode
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -1)"
+      - name: WootKit tests
+        working-directory: Packages/WootKit
+        run: swift test
+      - name: Build the app
+        run: |
+          brew install xcodegen
+          xcodegen generate
+          xcodebuild build -project Woot.xcodeproj -scheme Woot \
+            -destination generic/platform=iOS CODE_SIGNING_ALLOWED=NO -quiet

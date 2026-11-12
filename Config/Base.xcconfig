@@ -1,0 +1,4 @@
+// Signing is personal, so it lives in Local.xcconfig, which git ignores.
+// Copy Local.example.xcconfig to Local.xcconfig and set your own team and bundle id.
+WOOT_BUNDLE_ID = io.tild.woot
+#include? "Local.xcconfig"
