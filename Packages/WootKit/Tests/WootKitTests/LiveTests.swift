@@ -35,10 +35,16 @@ struct LiveTests {
     @Test(.timeLimit(.minutes(1))) func realtimeSubscribes() async throws {
         let session = try await session()
         let realtime = RealtimeClient(server: session.server, pubsubToken: session.pubsubToken, accountID: session.accountID, userID: session.userID)
-        await realtime.start()
-        defer { Task { await realtime.stop() } }
-        for await update in realtime.updates {
-            if case .connected = update { return }
+        // Twice, as when the app leaves and returns to the foreground.
+        for round in 1...2 {
+            var subscribed = false
+            for await update in realtime.updates() {
+                if case .connected = update {
+                    subscribed = true
+                    break
+                }
+            }
+            #expect(subscribed, "round \(round) never subscribed")
         }
     }
 }

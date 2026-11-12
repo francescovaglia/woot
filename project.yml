@@ -42,8 +42,23 @@ targets:
         TARGETED_DEVICE_FAMILY: "1,2"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ENABLE_PREVIEWS: YES
+  WootUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [WootUITests]
+    dependencies:
+      - target: Woot
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.tild.woot.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: Woot
+        SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated
 schemes:
   Woot:
     build:
       targets:
         Woot: all
+    test:
+      targets:
+        - WootUITests

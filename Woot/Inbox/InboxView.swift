@@ -4,116 +4,49 @@ import SwiftUI
 
 struct InboxView: View {
     @Environment(AccountStore.self) private var account
-    @State private var path: [Conversation] = []
-    @State private var query = ""
-    @State private var searchResults: [Conversation]?
+    @State private var path: [Int] = []
     @State private var showsSettings = false
 
-    private var store: InboxStore { account.inbox }
-
     var body: some View {
+        @Bindable var search = account.search
         NavigationStack(path: $path) {
-            list
-                .navigationTitle(title)
-                .navigationSubtitle(subtitle)
-                .toolbar { toolbar }
-                .searchable(text: $query, prompt: "Search conversations")
-                .task(id: query) { await search() }
-                .refreshable { await store.reload() }
-                .task { await store.reload() }
-                .navigationDestination(for: Conversation.self) { conversation in
-                    ConversationView(conversation: conversation, account: account)
+            Group {
+                if search.trimmedQuery.isEmpty {
+                    ConversationList()
+                } else {
+                    SearchResultsView()
                 }
-                .sheet(isPresented: $showsSettings) { SettingsView() }
+            }
+            .navigationTitle(title)
+            .navigationSubtitle(subtitle)
+            .toolbar { toolbar }
+            .searchable(text: $search.query, prompt: "Name, email or message")
+            .navigationDestination(for: Int.self) { id in
+                ConversationScreen(id: id)
+            }
+            .sheet(isPresented: $showsSettings) { SettingsView() }
         }
     }
 
     private var title: String {
-        store.filter.inboxID.flatMap(account.inbox(id:))?.name ?? String(localized: "Inbox")
+        account.inbox.filter.inboxID.flatMap(account.inbox(id:))?.name ?? String(localized: "Inbox")
     }
 
     private var subtitle: String {
         if account.connection == .connecting { return String(localized: "Connecting…") }
-        return "\(store.filter.scope.title) · \(store.filter.status.title)"
-    }
-
-    @ViewBuilder
-    private var list: some View {
-        let conversations = searchResults ?? store.conversations
-        List {
-            ForEach(conversations) { conversation in
-                NavigationLink(value: conversation) {
-                    ConversationRow(conversation: conversation, isOnline: account.onlineContacts.contains(conversation.contact.id))
-                }
-                .swipeActions(edge: .trailing) { statusAction(for: conversation) }
-                .swipeActions(edge: .leading) {
-                    if conversation.unreadCount == 0 {
-                        Button("Unread", systemImage: "message.badge") {
-                            Task { await store.markUnread(conversation) }
-                        }
-                        .tint(.blue)
-                    }
-                }
-                .contextMenu { statusAction(for: conversation) }
-                .onAppear {
-                    if searchResults == nil, conversation.id == conversations.last?.id {
-                        Task { await store.loadMore() }
-                    }
-                }
-            }
-        }
-        .listStyle(.plain)
-        .overlay { emptyState(isEmpty: conversations.isEmpty) }
-    }
-
-    @ViewBuilder
-    private func statusAction(for conversation: Conversation) -> some View {
-        if conversation.status == .resolved {
-            Button("Reopen", systemImage: "arrow.uturn.backward") {
-                Task { await store.setStatus(.open, of: conversation) }
-            }
-            .tint(.orange)
-        } else {
-            Button("Resolve", systemImage: "checkmark") {
-                Task { await store.setStatus(.resolved, of: conversation) }
-            }
-            .tint(.green)
-        }
-    }
-
-    @ViewBuilder
-    private func emptyState(isEmpty: Bool) -> some View {
-        if searchResults != nil, isEmpty {
-            ContentUnavailableView.search(text: query)
-        } else if case .failed(let error) = store.phase, isEmpty {
-            ContentUnavailableView {
-                Label("Couldn't load conversations", systemImage: "wifi.exclamationmark")
-            } description: {
-                Text(error.localizedDescription)
-            } actions: {
-                Button("Try Again") { Task { await store.reload() } }
-                    .buttonStyle(.glass)
-            }
-        } else if store.phase == .loading, isEmpty {
-            ProgressView()
-        } else if isEmpty {
-            ContentUnavailableView(
-                "All caught up",
-                systemImage: "tray",
-                description: Text("No \(store.filter.status.title.lowercased()) conversations here.")
-            )
-        }
+        let filter = account.inbox.filter
+        return "\(filter.scope.title) · \(filter.status.title)"
     }
 
     @ToolbarContentBuilder
     private var toolbar: some ToolbarContent {
-        @Bindable var store = store
+        @Bindable var inbox = account.inbox
         ToolbarItem(placement: .topBarLeading) {
             Menu {
-                Picker("Inbox", selection: $store.filter.inboxID) {
+                Picker("Inbox", selection: $inbox.filter.inboxID) {
                     Label("All Inboxes", systemImage: "tray.2").tag(Int?.none)
-                    ForEach(account.inboxes) { inbox in
-                        Label(inbox.name, systemImage: inbox.symbol).tag(Optional(inbox.id))
+                    ForEach(account.inboxes) { item in
+                        Label(item.name, systemImage: item.symbol).tag(Optional(item.id))
                     }
                 }
             } label: {
@@ -122,12 +55,12 @@ struct InboxView: View {
         }
         ToolbarItem(placement: .topBarTrailing) {
             Menu {
-                Picker("Assigned", selection: $store.filter.scope) {
+                Picker("Assigned", selection: $inbox.filter.scope) {
                     ForEach(ConversationFilter.Scope.allCases, id: \.self) { scope in
                         Label(scope.title, systemImage: scope.symbol)
                     }
                 }
-                Picker("Status", selection: $store.filter.status) {
+                Picker("Status", selection: $inbox.filter.status) {
                     ForEach(Conversation.Status.allCases, id: \.self) { status in
                         Label(status.title, systemImage: status.symbol)
                     }
@@ -149,16 +82,114 @@ struct InboxView: View {
             .accessibilityLabel("Settings, \(account.availability.title)")
         }
     }
+}
 
-    private func search() async {
-        let text = query.trimmingCharacters(in: .whitespaces)
-        guard !text.isEmpty else {
-            searchResults = nil
-            return
+/// The filtered list. Its own view, so typing in search doesn't re-render every row.
+private struct ConversationList: View {
+    @Environment(AccountStore.self) private var account
+
+    var body: some View {
+        let store = account.inbox
+        List {
+            ForEach(store.conversations) { conversation in
+                NavigationLink(value: conversation.id) {
+                    ConversationRow(conversation: conversation, isOnline: account.onlineContacts.contains(conversation.contact.id))
+                }
+                .swipeActions(edge: .trailing) { StatusAction(conversation: conversation) }
+                .swipeActions(edge: .leading) {
+                    if conversation.unreadCount == 0 {
+                        Button("Unread", systemImage: "message.badge") {
+                            Task { await store.markUnread(conversation) }
+                        }
+                        .tint(.blue)
+                    }
+                }
+                .contextMenu { StatusAction(conversation: conversation) }
+                .onAppear {
+                    if conversation.id == store.conversations.last?.id {
+                        Task { await store.loadMore() }
+                    }
+                }
+            }
         }
-        try? await Task.sleep(for: .milliseconds(300))
-        guard !Task.isCancelled else { return }
-        searchResults = (try? await store.search(text)) ?? []
+        .listStyle(.plain)
+        .refreshable { await store.reload() }
+        .overlay { emptyState }
+    }
+
+    @ViewBuilder
+    private var emptyState: some View {
+        let store = account.inbox
+        if !store.conversations.isEmpty {
+            EmptyView()
+        } else if case .failed(let error) = store.phase {
+            ContentUnavailableView {
+                Label("Couldn't load conversations", systemImage: "wifi.exclamationmark")
+            } description: {
+                Text(error.localizedDescription)
+            } actions: {
+                Button("Try Again") { Task { await store.reload() } }
+                    .buttonStyle(.glass)
+            }
+        } else if store.phase == .loading {
+            ProgressView()
+        } else {
+            ContentUnavailableView(
+                "All caught up",
+                systemImage: "tray",
+                description: Text("No \(store.filter.status.title.lowercased()) conversations here.")
+            )
+        }
+    }
+}
+
+private struct StatusAction: View {
+    @Environment(AccountStore.self) private var account
+    let conversation: Conversation
+
+    var body: some View {
+        if conversation.status == .resolved {
+            Button("Reopen", systemImage: "arrow.uturn.backward") {
+                Task { await account.inbox.setStatus(.open, of: conversation) }
+            }
+            .tint(.orange)
+        } else {
+            Button("Resolve", systemImage: "checkmark") {
+                Task { await account.inbox.setStatus(.resolved, of: conversation) }
+            }
+            .tint(.green)
+        }
+    }
+}
+
+/// Opens a conversation by number: from the cache, from the loaded list, or from the server.
+/// Creating the store while rendering is safe because the cache returns the same one every time.
+struct ConversationScreen: View {
+    @Environment(AccountStore.self) private var account
+    let id: Int
+    @State private var store: ConversationStore?
+    @State private var error: ChatwootError?
+
+    var body: some View {
+        if let store = store ?? account.cachedConversationStore(id: id) ?? account.inbox.conversation(id: id).map(account.conversationStore) {
+            ConversationView(store: store)
+        } else if let error {
+            ContentUnavailableView {
+                Label("Couldn't open conversation", systemImage: "exclamationmark.bubble")
+            } description: {
+                Text(error.localizedDescription)
+            }
+        } else {
+            ProgressView()
+                .task {
+                    do throws(ChatwootError) {
+                        let conversation = try await account.send(account.api.conversation(id))
+                        store = account.conversationStore(for: conversation)
+                    } catch {
+                        self.error = error
+                    }
+                }
+        }
     }
 }
 

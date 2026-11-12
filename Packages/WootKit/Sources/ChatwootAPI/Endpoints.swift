@@ -45,7 +45,8 @@ public struct ConversationPage: Decodable, Sendable {
 }
 
 public struct OutgoingMessage: Sendable {
-    public struct File: Sendable {
+    public struct File: Identifiable, Sendable {
+        public let id = UUID()
         public let data: Data
         public let fileName: String
         public let mimeType: String
@@ -75,6 +76,38 @@ extension Endpoint where Response == Profile {
     public static var profile: Endpoint<Profile> { Endpoint(.get, "api/v1/profile") }
 }
 
+/// A conversation found by search. Lighter than `Conversation`: open it by `id`.
+public struct ConversationSearchHit: Identifiable, Hashable, Sendable, Decodable {
+    public let id: Int
+    public let contact: Contact
+    public let inboxName: String?
+    public let createdAt: Date
+
+    private enum CodingKeys: String, CodingKey {
+        case id, contact, inbox
+        case createdAt = "created_at"
+    }
+
+    private struct InboxName: Decodable { let name: String }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(Int.self, forKey: .id)
+        contact = try container.decode(Contact.self, forKey: .contact)
+        inboxName = try container.decodeIfPresent(InboxName.self, forKey: .inbox)?.name
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+    }
+}
+
+private struct SearchPayload: Decodable {
+    struct Results: Decodable {
+        let conversations: [ConversationSearchHit]?
+        let messages: [Message]?
+    }
+
+    let payload: Results
+}
+
 /// The REST calls Woot makes, scoped to one account.
 public struct AccountAPI: Sendable {
     public let accountID: Int
@@ -97,18 +130,28 @@ public struct AccountAPI: Sendable {
         return Endpoint(.get, "\(base)/conversations", query: query)
     }
 
-    public func searchConversations(_ text: String, page: Int = 1) -> Endpoint<ConversationPage> {
-        Endpoint(.get, "\(base)/conversations/search", query: [
-            URLQueryItem(name: "q", value: text),
-            URLQueryItem(name: "page", value: String(page)),
-        ])
+    /// Matches contact name, email, phone, identifier and the conversation number.
+    public func searchConversations(_ text: String) -> Endpoint<[ConversationSearchHit]> {
+        Endpoint(.get, "\(base)/search/conversations", query: [URLQueryItem(name: "q", value: text)]) {
+            try JSONDecoder.chatwoot.decode(SearchPayload.self, from: $0).payload.conversations ?? []
+        }
+    }
+
+    /// Matches message text, newest first.
+    public func searchMessages(_ text: String) -> Endpoint<[Message]> {
+        Endpoint(.get, "\(base)/search/messages", query: [URLQueryItem(name: "q", value: text)]) {
+            try JSONDecoder.chatwoot.decode(SearchPayload.self, from: $0).payload.messages ?? []
+        }
     }
 
     public func conversation(_ id: Int) -> Endpoint<Conversation> {
         Endpoint(.get, "\(base)/conversations/\(id)")
     }
 
-    /// Returns up to 20 messages, oldest first. Pass the oldest loaded id to page back.
+    /// Chatwoot's fixed page size for messages.
+    public static let messagePageSize = 20
+
+    /// Returns up to `messagePageSize` messages, oldest first. Pass the oldest loaded id to page back.
     public func messages(in conversationID: Int, before messageID: Int? = nil) -> Endpoint<[Message]> {
         let query = messageID.map { [URLQueryItem(name: "before", value: String($0))] } ?? []
         return Endpoint(.get, "\(base)/conversations/\(conversationID)/messages", query: query) {

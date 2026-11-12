@@ -73,3 +73,24 @@ func fixture(_ name: String) throws -> Data {
         #expect(message.attachments.first?.kind == .file)
     }
 }
+
+@Suite struct SearchDecodingTests {
+    let api = AccountAPI(accountID: 1)
+
+    @Test func conversationHits() throws {
+        let hits = try api.searchConversations("maya").decode(fixture("search"))
+        #expect(hits.map(\.id) == [511])
+        #expect(hits.first?.contact.email == "maya@example.com")
+        #expect(hits.first?.inboxName == "Website")
+    }
+
+    @Test func messageHits() throws {
+        let messages = try api.searchMessages("export").decode(fixture("search"))
+        #expect(messages.first?.conversationID == 511)
+    }
+
+    @Test func emptyResults() throws {
+        #expect(try api.searchMessages("x").decode(Data(#"{"payload":{"messages":[]}}"#.utf8)).isEmpty)
+        #expect(try api.searchConversations("x").decode(Data(#"{"payload":{}}"#.utf8)).isEmpty)
+    }
+}

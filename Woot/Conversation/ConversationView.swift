@@ -4,14 +4,10 @@ import SwiftUI
 
 struct ConversationView: View {
     @Environment(AccountStore.self) private var account
-    @State private var store: ConversationStore
+    @Bindable var store: ConversationStore
     @State private var scrollPosition = ScrollPosition(edge: .bottom)
     @State private var showsContact = false
     @State private var previewURL: URL?
-
-    init(conversation: Conversation, account: AccountStore) {
-        _store = State(initialValue: ConversationStore(conversation: conversation, account: account))
-    }
 
     var body: some View {
         ScrollView {
@@ -20,11 +16,12 @@ struct ConversationView: View {
                     ProgressView()
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .task { await store.loadOlder() }
+                        // Keyed by the oldest message so it fires again if it stays visible after a page loads.
+                        .task(id: store.messages.first?.id) { await store.loadOlder() }
                 }
                 transcript
                 ForEach(store.pending) { pending in
-                    PendingBubble(pending: pending, onRetry: { store.retry(pending) }, onDiscard: { store.discard(pending) })
+                    PendingBubble(pending: pending, onRetry: { Task { await store.retry(pending) } }, onDiscard: { store.discard(pending) })
                 }
                 if store.contactIsTyping {
                     TypingBubble()
@@ -51,6 +48,14 @@ struct ConversationView: View {
             ContactView(contact: store.conversation.contact, isOnline: account.onlineContacts.contains(store.conversation.contact.id))
         }
         .quickLookPreview($previewURL)
+        .confirmationDialog("Replace your draft with this note?", isPresented: Binding(
+            get: { store.noteToUse != nil },
+            set: { if !$0 { store.noteToUse = nil } }
+        ), titleVisibility: .visible) {
+            Button("Replace Draft", role: .destructive) {
+                if let note = store.noteToUse { store.useAsReply(note, confirmed: true) }
+            }
+        }
         .task {
             account.openConversation = store
             await store.reload()
@@ -74,7 +79,7 @@ struct ConversationView: View {
                 startsGroup: previous?.sender != message.sender || previous?.kind == .activity || previous?.isPrivate == true,
                 isSeen: message.id == lastSeenOutgoingID,
                 onOpen: open,
-                onUseAsReply: store.useAsReply
+                onUseAsReply: { store.useAsReply($0) }
             )
         }
     }
@@ -184,7 +189,7 @@ private struct PendingBubble: View {
 
     var body: some View {
         VStack(alignment: .trailing, spacing: 4) {
-            ForEach(pending.message.files, id: \.fileName) { file in
+            ForEach(pending.message.files) { file in
                 Label(file.fileName, systemImage: "paperclip")
                     .font(.caption)
                     .foregroundStyle(.secondary)

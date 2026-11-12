@@ -1,90 +1,99 @@
 import Foundation
 import ChatwootModels
+import Synchronization
 
-/// Keeps one ActionCable connection to Chatwoot's `RoomChannel` alive and streams its events.
+/// Connects to Chatwoot's `RoomChannel` over ActionCable.
 ///
-/// Reconnects with exponential backoff and treats ten seconds of silence as a dead socket,
-/// since Chatwoot pings every three. After every `.connected` the consumer should refetch
-/// whatever it shows: events sent while the socket was down are not replayed.
-public actor RealtimeClient {
+/// Each call to `updates()` owns one connection for as long as it is iterated: it reconnects
+/// with exponential backoff and treats ten seconds of silence as a dead socket, since Chatwoot
+/// pings every three. Cancel the iterating task to disconnect.
+/// After every `.connected` the consumer should refetch what it shows: events sent while
+/// the socket was down are not replayed.
+public struct RealtimeClient: Sendable {
     public enum Update: Sendable {
         case connecting
         case connected
         case event(RealtimeEvent)
+        /// The server refused the credentials. The stream ends after this.
+        case rejected
     }
-
-    public nonisolated let updates: AsyncStream<Update>
 
     private let url: URL
     private let identifier: String
     private let urlSession: URLSession
-    private let continuation: AsyncStream<Update>.Continuation
-    private var runTask: Task<Void, Never>?
-    private var socket: URLSessionWebSocketTask?
-    private var lastFrameAt = ContinuousClock.now
-    private var isSubscribed = false
 
-    private static let silenceLimit = Duration.seconds(10)
-    private static let presenceInterval = Duration.seconds(20)
+    static let silenceLimit = Duration.seconds(10)
+    static let presenceInterval = Duration.seconds(20)
 
     public init(server: URL, pubsubToken: String, accountID: Int, userID: Int, urlSession: URLSession = .shared) {
         var components = URLComponents(url: server.appending(path: "cable"), resolvingAgainstBaseURL: false)!
         components.scheme = components.scheme == "http" ? "ws" : "wss"
         url = components.url!
-        // ActionCable matches subscriptions by this exact string, so it is built once.
+        // ActionCable matches later commands to the subscription by this exact string.
         let channel: [String: any Sendable] = [
             "channel": "RoomChannel", "pubsub_token": pubsubToken, "account_id": accountID, "user_id": userID,
         ]
         identifier = String(decoding: try! JSONSerialization.data(withJSONObject: channel, options: .sortedKeys), as: UTF8.self)
         self.urlSession = urlSession
-        (updates, continuation) = AsyncStream.makeStream(bufferingPolicy: .bufferingNewest(256))
     }
 
-    public func start() {
-        guard runTask == nil else { return }
-        runTask = Task { await run() }
+    public func updates() -> AsyncStream<Update> {
+        AsyncStream(bufferingPolicy: .bufferingNewest(256)) { continuation in
+            let task = Task {
+                await run(continuation)
+                continuation.finish()
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
     }
 
-    public func stop() {
-        runTask?.cancel()
-        runTask = nil
-        // A pending `receive()` doesn't observe task cancellation, closing the socket ends it.
-        socket?.cancel(with: .goingAway, reason: nil)
-        socket = nil
-    }
-
-    private func run() async {
+    private func run(_ continuation: AsyncStream<Update>.Continuation) async {
         var attempt = 0
         while !Task.isCancelled {
             continuation.yield(.connecting)
-            let socket = urlSession.webSocketTask(with: url)
-            self.socket = socket
-            socket.resume()
-            let wasConnected = await connection(over: socket)
+            switch await connect(continuation) {
+            case .rejected:
+                continuation.yield(.rejected)
+                return
+            case .dropped(let wasSubscribed):
+                attempt = wasSubscribed ? 0 : attempt + 1
+                try? await Task.sleep(for: Self.backoff(attempt: attempt))
+            }
+        }
+    }
+
+    private enum Outcome {
+        case rejected
+        case dropped(wasSubscribed: Bool)
+    }
+
+    /// Runs one socket until it fails, goes quiet, is refused, or the task is cancelled.
+    private func connect(_ continuation: AsyncStream<Update>.Continuation) async -> Outcome {
+        let socket = urlSession.webSocketTask(with: url)
+        let state = ConnectionState()
+        socket.resume()
+
+        await withTaskCancellationHandler {
+            await withTaskGroup(of: Void.self) { group in
+                group.addTask { await receive(from: socket, state: state, continuation: continuation) }
+                group.addTask { await watchSilence(state: state) }
+                group.addTask { await keepPresence(over: socket) }
+                await group.next()
+                // A pending `receive()` ignores task cancellation; closing the socket is what ends it.
+                socket.cancel(with: .goingAway, reason: nil)
+                group.cancelAll()
+            }
+        } onCancel: {
             socket.cancel(with: .goingAway, reason: nil)
-            attempt = wasConnected ? 0 : attempt + 1
-            try? await Task.sleep(for: Self.backoff(attempt: attempt))
         }
+
+        return state.value.withLock { $0.wasRejected ? .rejected : .dropped(wasSubscribed: $0.isSubscribed) }
     }
 
-    /// Runs until the socket fails or goes quiet. Returns whether the subscription was confirmed.
-    private func connection(over socket: URLSessionWebSocketTask) async -> Bool {
-        lastFrameAt = .now
-        isSubscribed = false
-        await withTaskGroup(of: Void.self) { group in
-            group.addTask { await self.receive(from: socket) }
-            group.addTask { await self.watchSilence() }
-            group.addTask { await self.keepPresence(over: socket) }
-            await group.next()
-            group.cancelAll()
-        }
-        return isSubscribed
-    }
-
-    private func receive(from socket: URLSessionWebSocketTask) async {
+    private func receive(from socket: URLSessionWebSocketTask, state: ConnectionState, continuation: AsyncStream<Update>.Continuation) async {
         while !Task.isCancelled {
             guard let message = try? await socket.receive() else { return }
-            lastFrameAt = .now
+            state.value.withLock { $0.lastFrameAt = .now }
             let data = switch message {
             case .data(let data): data
             case .string(let text): Data(text.utf8)
@@ -96,11 +105,14 @@ public actor RealtimeClient {
             case .welcome:
                 try? await send(["command": "subscribe", "identifier": identifier], over: socket)
             case .subscribed:
-                isSubscribed = true
+                state.value.withLock { $0.isSubscribed = true }
                 continuation.yield(.connected)
             case .event(let event):
                 continuation.yield(.event(event))
-            case .rejected, .disconnect:
+            case .rejected, .disconnect(reconnect: false):
+                state.value.withLock { $0.wasRejected = true }
+                return
+            case .disconnect(reconnect: true):
                 return
             case .ping, .ignored:
                 break
@@ -108,8 +120,8 @@ public actor RealtimeClient {
         }
     }
 
-    private func watchSilence() async {
-        while !Task.isCancelled, lastFrameAt.duration(to: .now) < Self.silenceLimit {
+    private func watchSilence(state: ConnectionState) async {
+        while !Task.isCancelled, state.value.withLock({ $0.lastFrameAt.duration(to: .now) }) < Self.silenceLimit {
             try? await Task.sleep(for: .seconds(1))
         }
     }
@@ -131,4 +143,15 @@ public actor RealtimeClient {
     static func backoff(attempt: Int) -> Duration {
         attempt == 0 ? .milliseconds(500) : .seconds(min(30, 1 << min(attempt - 1, 5)))
     }
+}
+
+/// Shared by the receive loop and the watchdog of one connection.
+private final class ConnectionState: Sendable {
+    struct Value {
+        var lastFrameAt = ContinuousClock.now
+        var isSubscribed = false
+        var wasRejected = false
+    }
+
+    let value = Mutex(Value())
 }

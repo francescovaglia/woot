@@ -28,6 +28,7 @@ struct LoginView: View {
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .focused($focus, equals: .server)
+                        .accessibilityIdentifier("server")
                         .submitLabel(.next)
                         .onSubmit { focus = method == .password ? .email : .token }
                 } header: {
@@ -64,14 +65,18 @@ struct LoginView: View {
                             .onSubmit(signIn)
                     } footer: {
                         Button("Use an access token instead") { method = .token }
+                            .accessibilityIdentifier("useToken")
                             .font(.footnote)
                     }
                 } else {
                     Section {
                         SecureField("Access token", text: $token)
+                            // Not a password: keeps iOS from offering to save it in Passwords.
+                            .textContentType(.oneTimeCode)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                             .focused($focus, equals: .token)
+                            .accessibilityIdentifier("token")
                             .submitLabel(.go)
                             .onSubmit(signIn)
                     } footer: {
@@ -91,20 +96,23 @@ struct LoginView: View {
                 }
             }
             .navigationTitle("Woot")
-            .toolbar {
-                ToolbarItem(placement: .bottomBar) {
-                    Button(action: signIn) {
+            // A safe-area bar rises with the keyboard; a bottom toolbar would sit behind it.
+            .safeAreaBar(edge: .bottom) {
+                Button(action: signIn) {
+                    Group {
                         if isWorking {
                             ProgressView()
                         } else {
                             Text(twoFactorToken == nil ? "Sign In" : "Verify")
-                                .frame(maxWidth: .infinity)
                         }
                     }
-                    .buttonStyle(.glassProminent)
-                    .controlSize(.large)
-                    .disabled(!canSubmit || isWorking)
+                    .frame(maxWidth: .infinity)
                 }
+                .buttonStyle(.glassProminent)
+                .controlSize(.large)
+                .disabled(!canSubmit || isWorking)
+                .accessibilityIdentifier("signIn")
+                .padding()
             }
             .disabled(isWorking)
             .animation(.default, value: method)

@@ -1,0 +1,18 @@
+{
+  "payload": {
+    "conversations": [
+      {
+        "id": 511, "account_id": 1, "created_at": 1794495535,
+        "message": { "id": 1603, "content": "Can I export a PDF report?", "conversation_id": 511, "message_type": 0, "created_at": 1794495535 },
+        "contact": { "email": "maya@example.com", "id": 42, "name": "Maya Patel", "phone_number": null, "identifier": null, "additional_attributes": {}, "last_activity_at": 1794495535 },
+        "inbox": { "id": 2, "channel_id": 1, "name": "Website", "channel_type": "Channel::WebWidget" },
+        "agent": {},
+        "additional_attributes": {}
+      }
+    ],
+    "messages": [
+      { "id": 1606, "content": "Choose Export PDF Report.", "inbox_id": 2, "conversation_id": 511, "message_type": 1,
+        "created_at": 1794495757, "private": false, "sender": { "id": 1, "name": "Alex", "type": "user" } }
+    ]
+  }
+}

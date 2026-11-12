@@ -21,15 +21,23 @@ final class InboxStore {
     private(set) var phase = Phase.loading
     private(set) var canLoadMore = false
 
-    @ObservationIgnored private unowned let account: AccountStore
+    @ObservationIgnored private weak var account: AccountStore?
     @ObservationIgnored private var page = 1
+    @ObservationIgnored private var isLoadingMore = false
     @ObservationIgnored private var generation = 0
+    /// Conversations being fetched because a message arrived for one that isn't loaded.
+    @ObservationIgnored private var fetching: Set<Int> = []
 
     init(account: AccountStore) {
         self.account = account
     }
 
+    func conversation(id: Int) -> Conversation? {
+        conversations.first { $0.id == id }
+    }
+
     func reload() async {
+        guard let account else { return }
         generation += 1
         let current = generation
         if conversations.isEmpty { phase = .loading }
@@ -49,21 +57,21 @@ final class InboxStore {
     }
 
     func loadMore() async {
-        guard canLoadMore, phase == .loaded else { return }
+        guard let account, canLoadMore, !isLoadingMore, phase == .loaded else { return }
+        isLoadingMore = true
+        defer { isLoadingMore = false }
         let current = generation
-        guard let result = try? await account.send(account.api.conversations(filter, page: page + 1)), current == generation else { return }
-        page += 1
+        let next = page + 1
+        guard let result = try? await account.send(account.api.conversations(filter, page: next)), current == generation else { return }
+        page = next
         canLoadMore = !result.conversations.isEmpty
         for conversation in result.conversations { upsert(conversation) }
-    }
-
-    func search(_ text: String) async throws(ChatwootError) -> [Conversation] {
-        try await account.send(account.api.searchConversations(text)).conversations
     }
 
     /// Applies the change at once and rolls it back if the server refuses it.
     @discardableResult
     func setStatus(_ status: Conversation.Status, of conversation: Conversation) async -> Bool {
+        guard let account else { return false }
         var updated = conversation
         updated.status = status
         upsert(updated)
@@ -77,6 +85,7 @@ final class InboxStore {
     }
 
     func markUnread(_ conversation: Conversation) async {
+        guard let account else { return }
         var updated = conversation
         updated.unreadCount = max(1, conversation.unreadCount)
         upsert(updated)
@@ -95,13 +104,13 @@ final class InboxStore {
             upsert(conversation)
         case .messageCreated(let message) where message.kind != .activity:
             guard let index = conversations.firstIndex(where: { $0.id == message.conversationID }) else {
-                // A conversation outside the loaded page just became active.
+                // A conversation beyond the loaded page just became active.
                 Task { await fetchAndUpsert(message.conversationID) }
                 return
             }
             conversations[index].lastMessage = message
             conversations[index].lastActivityAt = message.createdAt
-            if message.kind == .incoming, account.openConversation?.conversationID != message.conversationID {
+            if message.kind == .incoming, account?.openConversation?.conversationID != message.conversationID {
                 conversations[index].unreadCount += 1
             }
             conversations.sort(by: Self.newestFirst)
@@ -111,6 +120,8 @@ final class InboxStore {
     }
 
     private func fetchAndUpsert(_ id: Int) async {
+        guard let account, fetching.insert(id).inserted else { return }
+        defer { fetching.remove(id) }
         guard let conversation = try? await account.send(account.api.conversation(id)) else { return }
         upsert(conversation)
     }
@@ -128,7 +139,7 @@ final class InboxStore {
         guard conversation.status == filter.status else { return false }
         if let inboxID = filter.inboxID, conversation.inboxID != inboxID { return false }
         return switch filter.scope {
-        case .mine: conversation.assignee?.id == account.userID
+        case .mine: conversation.assignee?.id == account?.userID
         case .unassigned: conversation.assignee == nil
         case .all: true
         }

@@ -9,6 +9,7 @@ struct Composer: View {
     @State private var photoSelection: [PhotosPickerItem] = []
     @State private var showsPhotoPicker = false
     @State private var showsFileImporter = false
+    @State private var skippedFiles: [String] = []
     @FocusState private var isFocused: Bool
 
     private var isNote: Bool { store.mode == .note }
@@ -22,7 +23,7 @@ struct Composer: View {
                     .padding(.horizontal, 6)
                     .transition(.opacity)
             }
-            if !store.files.isEmpty {
+            if !store.files.isEmpty || store.importingFiles > 0 {
                 attachmentChips
             }
             HStack(alignment: .bottom, spacing: 8) {
@@ -30,6 +31,7 @@ struct Composer: View {
                 TextField(isNote ? "Private note" : "Reply", text: $store.draft, axis: .vertical)
                     .lineLimit(1...6)
                     .focused($isFocused)
+                    .accessibilityIdentifier("composer")
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
                     .glassEffect(isNote ? .regular.tint(.yellow.opacity(0.35)).interactive() : .regular.interactive(), in: .rect(cornerRadius: 22))
@@ -51,6 +53,14 @@ struct Composer: View {
         .animation(.snappy, value: store.files.count)
         .photosPicker(isPresented: $showsPhotoPicker, selection: $photoSelection, maxSelectionCount: 10, matching: .any(of: [.images, .videos]))
         .fileImporter(isPresented: $showsFileImporter, allowedContentTypes: [.item], allowsMultipleSelection: true, onCompletion: importFiles)
+        .alert("Some files couldn't be attached", isPresented: Binding(
+            get: { !skippedFiles.isEmpty },
+            set: { if !$0 { skippedFiles = [] } }
+        )) {
+            Button("OK") {}
+        } message: {
+            Text(skippedFiles.joined(separator: "\n"))
+        }
         .onChange(of: photoSelection) { _, items in
             guard !items.isEmpty else { return }
             photoSelection = []
@@ -75,16 +85,17 @@ struct Composer: View {
         .buttonStyle(.glass)
         .buttonBorderShape(.circle)
         .accessibilityLabel("Attach or switch to a note")
+        .accessibilityIdentifier("composerMenu")
     }
 
     private var attachmentChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack {
-                ForEach(Array(store.files.enumerated()), id: \.offset) { index, file in
+                ForEach(store.files) { file in
                     HStack(spacing: 6) {
                         Image(systemName: file.mimeType.hasPrefix("image/") ? "photo" : "doc")
                         Text(file.fileName).lineLimit(1).frame(maxWidth: 140)
-                        Button("Remove", systemImage: "xmark.circle.fill") { store.files.remove(at: index) }
+                        Button("Remove", systemImage: "xmark.circle.fill") { store.files.removeAll { $0.id == file.id } }
                             .labelStyle(.iconOnly)
                             .foregroundStyle(.secondary)
                     }
@@ -93,27 +104,46 @@ struct Composer: View {
                     .padding(.vertical, 6)
                     .glassEffect(.regular, in: .capsule)
                 }
+                if store.importingFiles > 0 {
+                    ProgressView()
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .glassEffect(.regular, in: .capsule)
+                }
             }
         }
     }
 
+    /// Photos may need downloading from iCloud, so sending waits until every one is read.
     private func importPhotos(_ items: [PhotosPickerItem]) async {
-        for item in items {
-            guard let data = try? await item.loadTransferable(type: Data.self) else { continue }
+        store.importingFiles += items.count
+        for (index, item) in items.enumerated() {
+            defer { store.importingFiles -= 1 }
             let type = item.supportedContentTypes.first ?? .jpeg
-            let name = "Photo-\(store.files.count + 1).\(type.preferredFilenameExtension ?? "jpg")"
+            let name = "Photo \(Date.now.formatted(.iso8601.year().month().day())) \(index + 1).\(type.preferredFilenameExtension ?? "jpg")"
+            guard let data = try? await item.loadTransferable(type: Data.self) else {
+                skippedFiles.append(name)
+                continue
+            }
             store.files.append(.init(data: data, fileName: name, mimeType: type.preferredMIMEType ?? "application/octet-stream"))
         }
     }
 
     private func importFiles(_ result: Result<[URL], any Error>) {
-        guard case .success(let urls) = result else { return }
-        for url in urls {
-            guard url.startAccessingSecurityScopedResource() else { continue }
-            defer { url.stopAccessingSecurityScopedResource() }
-            guard let data = try? Data(contentsOf: url) else { continue }
-            let type = UTType(filenameExtension: url.pathExtension)
-            store.files.append(.init(data: data, fileName: url.lastPathComponent, mimeType: type?.preferredMIMEType ?? "application/octet-stream"))
+        switch result {
+        case .failure(let error):
+            skippedFiles.append(error.localizedDescription)
+        case .success(let urls):
+            for url in urls {
+                let accessing = url.startAccessingSecurityScopedResource()
+                defer { if accessing { url.stopAccessingSecurityScopedResource() } }
+                guard let data = try? Data(contentsOf: url) else {
+                    skippedFiles.append(url.lastPathComponent)
+                    continue
+                }
+                let type = UTType(filenameExtension: url.pathExtension)
+                store.files.append(.init(data: data, fileName: url.lastPathComponent, mimeType: type?.preferredMIMEType ?? "application/octet-stream"))
+            }
         }
     }
 }

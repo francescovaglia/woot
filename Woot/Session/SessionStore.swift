@@ -13,7 +13,7 @@ final class SessionStore {
 
     init() {
         if let session = keychain.read() {
-            account = AccountStore(session: session, onUnauthorized: { [weak self] in self?.signOut() })
+            account = AccountStore(session: session, onSignedOut: { [weak self] in self?.signOut() })
         }
     }
 
@@ -24,7 +24,7 @@ final class SessionStore {
             // Still usable for this launch; the next one asks to sign in again.
             Logger.session.error("Keychain write failed: \(error)")
         }
-        account = AccountStore(session: session, profile: profile, onUnauthorized: { [weak self] in self?.signOut() })
+        account = AccountStore(session: session, profile: profile, onSignedOut: { [weak self] in self?.signOut() })
     }
 
     func signOut() {

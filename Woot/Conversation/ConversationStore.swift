@@ -4,7 +4,8 @@ import ChatwootRealtime
 import Foundation
 import Observation
 
-/// One open conversation: its messages, the composer, and optimistic sends.
+/// One conversation: its messages, the composer, and optimistic sends.
+/// Cached by `AccountStore` for the session, so a draft survives leaving the screen.
 @Observable
 final class ConversationStore {
     /// A message that hasn't been confirmed by the server yet.
@@ -23,7 +24,7 @@ final class ConversationStore {
     private(set) var pending: [Pending] = []
     private(set) var isLoading = true
     private(set) var loadError: ChatwootError?
-    private(set) var hasOlder = true
+    private(set) var hasOlder = false
     private(set) var contactIsTyping = false
 
     var draft = "" {
@@ -31,8 +32,12 @@ final class ConversationStore {
     }
     var mode = Mode.reply
     var files: [OutgoingMessage.File] = []
+    /// Attachments still being read from Photos or Files; sending waits for them.
+    var importingFiles = 0
+    /// A note waiting for confirmation because using it would replace a typed draft.
+    var noteToUse: Message?
 
-    @ObservationIgnored private unowned let account: AccountStore
+    @ObservationIgnored private weak var account: AccountStore?
     @ObservationIgnored private var isLoadingOlder = false
     @ObservationIgnored private var typingResetTask: Task<Void, Never>?
     @ObservationIgnored private var lastTypingSentAt: Date?
@@ -45,17 +50,24 @@ final class ConversationStore {
     }
 
     var canSend: Bool {
-        !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !files.isEmpty
+        importingFiles == 0 && (!draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !files.isEmpty)
     }
 
+    /// Fetches the newest page. If it doesn't overlap what's loaded, messages were missed
+    /// while offline, so the transcript restarts from the newest page instead of keeping a gap.
     func reload() async {
+        guard let account else { return }
         do {
             async let latest = account.send(account.api.messages(in: conversationID))
             async let fresh = account.send(account.api.conversation(conversationID))
-            let loaded = try await latest
+            let page = try await latest
             conversation = try await fresh
-            merge(loaded)
-            hasOlder = loaded.count >= 20
+            let newestLoaded = messages.last?.id ?? .max
+            if messages.isEmpty || !page.contains(where: { $0.id <= newestLoaded }) {
+                messages = []
+                hasOlder = page.count >= AccountAPI.messagePageSize
+            }
+            merge(page)
             loadError = nil
         } catch {
             // `async let` erases typed throws, but `send` only throws ChatwootError.
@@ -66,11 +78,11 @@ final class ConversationStore {
     }
 
     func loadOlder() async {
-        guard hasOlder, !isLoadingOlder, let oldest = messages.first else { return }
+        guard let account, hasOlder, !isLoadingOlder, let oldest = messages.first else { return }
         isLoadingOlder = true
         defer { isLoadingOlder = false }
         guard let older = try? await account.send(account.api.messages(in: conversationID, before: oldest.id)) else { return }
-        hasOlder = !older.isEmpty
+        hasOlder = older.count >= AccountAPI.messagePageSize
         merge(older)
     }
 
@@ -89,27 +101,43 @@ final class ConversationStore {
         Task { await deliver(message) }
     }
 
-    func retry(_ item: Pending) {
-        guard let index = pending.firstIndex(where: { $0.id == item.id }) else { return }
+    /// Before sending again, checks whether the first attempt reached the server after all,
+    /// so a timeout never makes the contact receive the same reply twice.
+    func retry(_ item: Pending) async {
+        guard let account, let index = pending.firstIndex(where: { $0.id == item.id }) else { return }
         pending[index].failed = false
-        Task { await deliver(item.message) }
+        if let latest = try? await account.send(account.api.messages(in: conversationID)) {
+            merge(latest)
+            let delivered = latest.contains {
+                $0.kind == .outgoing && $0.sender?.id == account.userID && $0.content == item.message.content
+                    && $0.createdAt >= item.createdAt.addingTimeInterval(-5)
+            }
+            if delivered {
+                discard(id: item.id)
+                return
+            }
+        }
+        await deliver(item.message)
     }
 
     func discard(_ item: Pending) {
         discard(id: item.id)
     }
 
-    private func discard(id: String) {
-        pending.removeAll { $0.id == id }
-    }
-
     /// Moves a private note, such as an AI-written draft, into the composer as a reply.
-    func useAsReply(_ note: Message) {
+    /// Asks first if that would replace something already typed.
+    func useAsReply(_ note: Message, confirmed: Bool = false) {
+        guard confirmed || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            noteToUse = note
+            return
+        }
+        noteToUse = nil
         draft = note.text ?? ""
         mode = .reply
     }
 
     func setStatus(_ status: Conversation.Status) async {
+        guard let account else { return }
         let previous = conversation
         conversation.status = status
         if await !account.inbox.setStatus(status, of: previous) {
@@ -119,12 +147,16 @@ final class ConversationStore {
 
     func apply(_ event: RealtimeEvent) {
         switch event {
-        case .messageCreated(let message), .messageUpdated(let message):
-            guard message.conversationID == conversationID else { return }
+        case .messageCreated(let message) where message.conversationID == conversationID:
             merge([message])
             if message.kind == .incoming {
                 contactIsTyping = false
-                Task { await markRead() }
+                if account?.openConversation === self { Task { await markRead() } }
+            }
+        case .messageUpdated(let message) where message.conversationID == conversationID:
+            // Only replace: inserting an old message would break paging with `before`.
+            if let index = messages.firstIndex(where: { $0.id == message.id }) {
+                messages[index] = message
             }
         case .conversationChanged(let updated) where updated.id == conversationID:
             conversation = updated
@@ -144,6 +176,7 @@ final class ConversationStore {
     }
 
     private func deliver(_ message: OutgoingMessage) async {
+        guard let account else { return }
         do {
             let sent = try await account.send(account.api.send(message, in: conversationID))
             merge([sent])
@@ -153,6 +186,10 @@ final class ConversationStore {
                 pending[index].failed = true
             }
         }
+    }
+
+    private func discard(id: String) {
+        pending.removeAll { $0.id == id }
     }
 
     /// Adds or replaces messages by id, keeping chronological order, and retires matching optimistic sends.
@@ -165,6 +202,7 @@ final class ConversationStore {
     }
 
     private func markRead() async {
+        guard let account else { return }
         account.inbox.markRead(conversationID)
         try? await account.send(account.api.markRead(conversationID))
     }
@@ -191,6 +229,7 @@ final class ConversationStore {
     }
 
     private func sendTyping(_ isTyping: Bool) {
+        guard let account else { return }
         let endpoint = account.api.setTyping(isTyping, isPrivate: false, in: conversationID)
         Task { try? await account.send(endpoint) }
     }
