@@ -13,7 +13,7 @@ final class SessionStore {
 
     init() {
         if let session = keychain.read() {
-            account = AccountStore(session: session, onSignedOut: { [weak self] in self?.signOut() })
+            account = makeAccount(session: session, profile: nil)
         }
     }
 
@@ -24,7 +24,14 @@ final class SessionStore {
             // Still usable for this launch; the next one asks to sign in again.
             Logger.session.error("Keychain write failed: \(error)")
         }
-        account = AccountStore(session: session, profile: profile, onSignedOut: { [weak self] in self?.signOut() })
+        account = makeAccount(session: session, profile: profile)
+    }
+
+    /// A late failure from an old account must not sign out the one that replaced it.
+    private func makeAccount(session: ChatwootSession, profile: Profile?) -> AccountStore {
+        AccountStore(session: session, profile: profile) { [weak self] in
+            if self?.account?.session == session { self?.signOut() }
+        }
     }
 
     func signOut() {

@@ -13,12 +13,20 @@ public enum SignInResult: Sendable {
 
 extension ChatwootClient {
     /// Accepts what people actually type: `chat.example.com`, a trailing slash, a dashboard URL.
+    /// Credentials only travel over HTTPS; plain HTTP is allowed for a server on this machine.
     public static func normalizedServerURL(_ input: String) -> URL? {
         var text = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return nil }
         if !text.contains("://") { text = "https://" + text }
-        guard var components = URLComponents(string: text), let host = components.host, host.contains(".") || host == "localhost" else {
-            return nil
+        guard var components = URLComponents(string: text),
+              let host = components.host, !host.isEmpty, !host.contains(" "),
+              components.user == nil, components.password == nil
+        else { return nil }
+        let isLoopback = ["localhost", "127.0.0.1", "::1"].contains(host)
+        switch components.scheme?.lowercased() {
+        case "https": break
+        case "http" where isLoopback: break
+        default: return nil
         }
         components.path = ""
         components.query = nil
@@ -30,7 +38,7 @@ extension ChatwootClient {
     public func serverInfo() async throws(ChatwootError) -> ServerInfo {
         do {
             return try await send(Endpoint<ServerInfo>(.get, "api"))
-        } catch .decoding, .server {
+        } catch .decoding, .server(status: 404, _) {
             throw .notChatwoot
         }
     }

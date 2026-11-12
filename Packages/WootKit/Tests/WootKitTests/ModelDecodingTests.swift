@@ -56,6 +56,12 @@ func fixture(_ name: String) throws -> Data {
         #expect(messages[4].isDeleted)
     }
 
+    @Test func attachmentNamesCannotEscapeTheirFolder() {
+        let attachment = Attachment(id: 1, kind: .file, url: URL(string: "https://x.example/blobs/..%2F..%2FLibrary%2Fevil.db"))
+        #expect(attachment.fileName == "-..-Library-evil.db")
+        #expect(Attachment(id: 2, kind: .file, url: URL(string: "https://x.example/..")).fileName == "Attachment")
+    }
+
     @Test func profilePrefersTheActiveAccount() throws {
         let profile = try JSONDecoder.chatwoot.decode(Profile.self, from: fixture("profile"))
         #expect(profile.name == "Alex")
@@ -68,7 +74,7 @@ func fixture(_ name: String) throws -> Data {
     @Test func unknownEnumValuesDoNotFailDecoding() throws {
         let json = Data(#"{"id":1,"conversation_id":2,"message_type":9,"created_at":1,"status":"queued","attachments":[{"id":3,"file_type":"hologram"}]}"#.utf8)
         let message = try JSONDecoder.chatwoot.decode(Message.self, from: json)
-        #expect(message.kind == .activity)
+        #expect(message.kind == .unknown)
         #expect(message.status == .sent)
         #expect(message.attachments.first?.kind == .file)
     }

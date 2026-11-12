@@ -114,6 +114,9 @@ struct Composer: View {
         }
     }
 
+    /// Chatwoot's default upload limit for agents.
+    nonisolated private static let maximumFileSize = 40 * 1024 * 1024
+
     /// Photos may need downloading from iCloud, so sending waits until every one is read.
     private func importPhotos(_ items: [PhotosPickerItem]) async {
         store.importingFiles += items.count
@@ -121,7 +124,7 @@ struct Composer: View {
             defer { store.importingFiles -= 1 }
             let type = item.supportedContentTypes.first ?? .jpeg
             let name = "Photo \(Date.now.formatted(.iso8601.year().month().day())) \(index + 1).\(type.preferredFilenameExtension ?? "jpg")"
-            guard let data = try? await item.loadTransferable(type: Data.self) else {
+            guard let data = try? await item.loadTransferable(type: Data.self), data.count <= Self.maximumFileSize else {
                 skippedFiles.append(name)
                 continue
             }
@@ -134,16 +137,27 @@ struct Composer: View {
         case .failure(let error):
             skippedFiles.append(error.localizedDescription)
         case .success(let urls):
-            for url in urls {
-                let accessing = url.startAccessingSecurityScopedResource()
-                defer { if accessing { url.stopAccessingSecurityScopedResource() } }
-                guard let data = try? Data(contentsOf: url) else {
-                    skippedFiles.append(url.lastPathComponent)
-                    continue
+            store.importingFiles += urls.count
+            Task {
+                for url in urls {
+                    defer { store.importingFiles -= 1 }
+                    guard let data = await Self.read(url) else {
+                        skippedFiles.append(url.lastPathComponent)
+                        continue
+                    }
+                    let type = UTType(filenameExtension: url.pathExtension)
+                    store.files.append(.init(data: data, fileName: url.lastPathComponent, mimeType: type?.preferredMIMEType ?? "application/octet-stream"))
                 }
-                let type = UTType(filenameExtension: url.pathExtension)
-                store.files.append(.init(data: data, fileName: url.lastPathComponent, mimeType: type?.preferredMIMEType ?? "application/octet-stream"))
             }
         }
+    }
+
+    /// Reads a picked file off the main actor, refusing anything over the upload limit before loading it.
+    @concurrent
+    private static func read(_ url: URL) async -> Data? {
+        let accessing = url.startAccessingSecurityScopedResource()
+        defer { if accessing { url.stopAccessingSecurityScopedResource() } }
+        guard let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize, size <= maximumFileSize else { return nil }
+        return try? Data(contentsOf: url)
     }
 }

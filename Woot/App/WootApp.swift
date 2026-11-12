@@ -26,6 +26,10 @@ struct RootView: View {
                 LoginView()
             }
         }
+        // Links in messages and contact details come from strangers: only web, mail and phone open.
+        .environment(\.openURL, OpenURLAction { url in
+            ["https", "http", "mailto", "tel"].contains(url.scheme?.lowercased() ?? "") ? .systemAction : .discarded
+        })
         .onChange(of: scenePhase, initial: true) { _, phase in
             // Realtime presence makes the agent look online, so it only runs in the foreground.
             if phase == .active { sessions.account?.start() } else if phase == .background { sessions.account?.stop() }

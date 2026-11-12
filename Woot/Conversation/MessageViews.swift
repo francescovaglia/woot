@@ -12,9 +12,11 @@ struct MessageRow: View {
 
     var body: some View {
         switch message.kind {
+        case .unknown:
+            EmptyView()
         case .activity:
             ActivityLine(text: message.text ?? "")
-        case _ where message.isPrivate:
+        case _ where message.isPrivate && !message.isDeleted:
             NoteCard(message: message, onOpen: onOpen, onUseAsReply: onUseAsReply)
         default:
             Bubble(message: message, startsGroup: startsGroup, isSeen: isSeen, onOpen: onOpen)

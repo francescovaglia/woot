@@ -7,13 +7,13 @@ public struct ChatwootClient: Sendable {
     let credential: Credential?
     let urlSession: URLSession
 
-    public init(server: URL, credential: Credential? = nil, urlSession: URLSession = .shared) {
+    public init(server: URL, credential: Credential? = nil, urlSession: URLSession = .chatwoot) {
         self.server = server
         self.credential = credential
         self.urlSession = urlSession
     }
 
-    public init(session: ChatwootSession, urlSession: URLSession = .shared) {
+    public init(session: ChatwootSession, urlSession: URLSession = .chatwoot) {
         self.init(server: session.server, credential: session.credential, urlSession: urlSession)
     }
 
@@ -62,4 +62,18 @@ public struct ChatwootClient: Sendable {
             throw .server(status: response.statusCode, message: message)
         }
     }
+}
+
+extension URLSession {
+    /// Authenticated traffic never touches disk: no cache, cookies or credential storage
+    /// that could outlive a sign-out. Credentials travel in headers, not cookies.
+    public static let chatwoot: URLSession = {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.urlCache = nil
+        configuration.httpCookieStorage = nil
+        configuration.httpShouldSetCookies = false
+        configuration.urlCredentialStorage = nil
+        configuration.waitsForConnectivity = false
+        return URLSession(configuration: configuration)
+    }()
 }

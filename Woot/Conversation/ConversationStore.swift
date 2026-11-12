@@ -36,6 +36,8 @@ final class ConversationStore {
     var importingFiles = 0
     /// A note waiting for confirmation because using it would replace a typed draft.
     var noteToUse: Message?
+    /// For the account's cache, which keeps recently opened conversations.
+    private(set) var lastOpenedAt = Date.distantPast
 
     @ObservationIgnored private weak var account: AccountStore?
     @ObservationIgnored private var isLoadingOlder = false
@@ -49,6 +51,15 @@ final class ConversationStore {
         self.account = account
     }
 
+    /// A draft, attachments or a message not yet confirmed: things that must survive.
+    var hasUnsavedWork: Bool {
+        !draft.isEmpty || !files.isEmpty || !pending.isEmpty
+    }
+
+    func didOpen() {
+        lastOpenedAt = .now
+    }
+
     var canSend: Bool {
         importingFiles == 0 && (!draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !files.isEmpty)
     }
@@ -57,6 +68,7 @@ final class ConversationStore {
     /// while offline, so the transcript restarts from the newest page instead of keeping a gap.
     func reload() async {
         guard let account else { return }
+        var loaded = false
         do {
             async let latest = account.send(account.api.messages(in: conversationID))
             async let fresh = account.send(account.api.conversation(conversationID))
@@ -69,12 +81,16 @@ final class ConversationStore {
             }
             merge(page)
             loadError = nil
+            loaded = true
         } catch {
             // `async let` erases typed throws, but `send` only throws ChatwootError.
             if messages.isEmpty { loadError = error as? ChatwootError ?? .transport(.unknown) }
         }
         isLoading = false
-        await markRead()
+        // Only what the agent actually saw counts as read.
+        if loaded, !Task.isCancelled, account.openConversation === self {
+            await markRead()
+        }
     }
 
     func loadOlder() async {
@@ -108,9 +124,13 @@ final class ConversationStore {
         pending[index].failed = false
         if let latest = try? await account.send(account.api.messages(in: conversationID)) {
             merge(latest)
+            // The REST API doesn't return echo ids, so match on everything that identifies the send.
+            let window = item.createdAt.addingTimeInterval(-5)...item.createdAt.addingTimeInterval(120)
             let delivered = latest.contains {
-                $0.kind == .outgoing && $0.sender?.id == account.userID && $0.content == item.message.content
-                    && $0.createdAt >= item.createdAt.addingTimeInterval(-5)
+                $0.kind == .outgoing && $0.sender?.id == account.userID && window.contains($0.createdAt)
+                    && $0.isPrivate == item.message.isPrivate
+                    && ($0.content ?? "") == item.message.content
+                    && $0.attachments.count == item.message.files.count
             }
             if delivered {
                 discard(id: item.id)

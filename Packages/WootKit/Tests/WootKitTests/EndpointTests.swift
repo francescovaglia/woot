@@ -34,13 +34,13 @@ import Testing
     }
 
     @Test func attachmentsSwitchToMultipart() throws {
-        let file = OutgoingMessage.File(data: Data("PNG".utf8), fileName: #"a "quoted".png"#, mimeType: "image/png")
+        let file = OutgoingMessage.File(data: Data("PNG".utf8), fileName: "a \"quoted\"\r\nX-Evil: 1.png", mimeType: "image/png")
         let request = api.send(OutgoingMessage(content: "See", isPrivate: false, files: [file]), in: 511)
             .urlRequest(server: server, headers: [:])
         let contentType = try #require(request.value(forHTTPHeaderField: "Content-Type"))
         #expect(contentType.hasPrefix("multipart/form-data; boundary=woot-"))
         let body = String(decoding: try #require(request.httpBody), as: UTF8.self)
-        #expect(body.contains(#"name="attachments[]"; filename="a quoted.png""#))
+        #expect(body.contains(#"name="attachments[]"; filename="a quotedX-Evil: 1.png""#), "no header injection")
         #expect(body.contains("name=\"private\"\r\n\r\nfalse\r\n"))
         #expect(body.hasSuffix("--\r\n"))
     }
@@ -63,12 +63,14 @@ import Testing
         ("chat.example.com", "https://chat.example.com"),
         ("  https://chat.example.com/app/accounts/1/dashboard ", "https://chat.example.com"),
         ("http://localhost:3000/", "http://localhost:3000"),
+        ("https://chatwoot", "https://chatwoot"),
+        ("https://[::1]:3000", "https://[::1]:3000"),
     ])
     func serverURLNormalization(input: String, expected: String) {
         #expect(ChatwootClient.normalizedServerURL(input)?.absoluteString == expected)
     }
 
-    @Test(arguments: ["", "not a host", "https://"])
+    @Test(arguments: ["", "not a host", "https://", "http://chat.example.com", "ftp://chat.example.com", "https://user:pass@chat.example.com"])
     func invalidServerURLs(input: String) {
         #expect(ChatwootClient.normalizedServerURL(input) == nil)
     }

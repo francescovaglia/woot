@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 import Testing
 @testable import ChatwootAPI
 @testable import ChatwootModels
@@ -11,14 +12,22 @@ final class StubProtocol: URLProtocol, @unchecked Sendable {
         var headers: [String: String] = [:]
     }
 
-    nonisolated(unsafe) static var responses: [String: Response] = [:]
-    nonisolated(unsafe) static var lastRequestHeaders: [String: String] = [:]
+    private static let state = Mutex<(responses: [String: Response], lastHeaders: [String: String])>(([:], [:]))
+
+    static var responses: [String: Response] {
+        get { state.withLock { $0.responses } }
+        set { state.withLock { $0.responses = newValue } }
+    }
+
+    static var lastRequestHeaders: [String: String] {
+        state.withLock { $0.lastHeaders }
+    }
 
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
     override func startLoading() {
-        Self.lastRequestHeaders = request.allHTTPHeaderFields ?? [:]
+        Self.state.withLock { $0.lastHeaders = request.allHTTPHeaderFields ?? [:] }
         guard let path = request.url?.path, let stub = Self.responses[path] else {
             client?.urlProtocol(self, didFailWithError: URLError(.notConnectedToInternet))
             return

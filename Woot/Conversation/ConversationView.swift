@@ -1,3 +1,4 @@
+import ChatwootAPI
 import ChatwootModels
 import QuickLook
 import SwiftUI
@@ -8,6 +9,7 @@ struct ConversationView: View {
     @State private var scrollPosition = ScrollPosition(edge: .bottom)
     @State private var showsContact = false
     @State private var previewURL: URL?
+    @State private var attachmentError: String?
 
     var body: some View {
         ScrollView {
@@ -48,6 +50,12 @@ struct ConversationView: View {
             ContactView(contact: store.conversation.contact, isOnline: account.onlineContacts.contains(store.conversation.contact.id))
         }
         .quickLookPreview($previewURL)
+        .alert(attachmentError ?? "", isPresented: Binding(
+            get: { attachmentError != nil },
+            set: { if !$0 { attachmentError = nil } }
+        )) {
+            Button("OK") {}
+        }
         .confirmationDialog("Replace your draft with this note?", isPresented: Binding(
             get: { store.noteToUse != nil },
             set: { if !$0 { store.noteToUse = nil } }
@@ -58,6 +66,7 @@ struct ConversationView: View {
         }
         .task {
             account.openConversation = store
+            store.didOpen()
             await store.reload()
         }
         .onDisappear {
@@ -144,19 +153,32 @@ struct ConversationView: View {
     }
 
     /// Downloads an attachment under its own name so Quick Look can show and share it.
+    /// The name is sanitized by `Attachment.fileName`, and each file gets its own folder.
     private func open(_ attachment: Attachment) {
-        guard let url = attachment.url else { return }
+        guard let url = attachment.url, url.scheme == "https" || url.host() == "localhost" else { return }
         Task {
-            guard let (temporary, _) = try? await URLSession.shared.download(from: url) else { return }
-            let destination = FileManager.default.temporaryDirectory
-                .appending(path: "\(attachment.id)", directoryHint: .isDirectory)
-            try? FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
-            let file = destination.appending(path: attachment.fileName)
-            try? FileManager.default.removeItem(at: file)
-            guard (try? FileManager.default.moveItem(at: temporary, to: file)) != nil else { return }
-            previewURL = file
+            do {
+                let (temporary, response) = try await URLSession.chatwoot.download(from: url)
+                guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
+                let size = try temporary.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+                guard size <= Self.maximumAttachmentSize else {
+                    try? FileManager.default.removeItem(at: temporary)
+                    attachmentError = String(localized: "This file is too large to preview.")
+                    return
+                }
+                let folder = URL.temporaryDirectory.appending(path: "attachments/\(attachment.id)", directoryHint: .isDirectory)
+                try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+                let file = folder.appending(path: attachment.fileName, directoryHint: .notDirectory)
+                try? FileManager.default.removeItem(at: file)
+                try FileManager.default.moveItem(at: temporary, to: file)
+                previewURL = file
+            } catch {
+                attachmentError = String(localized: "Couldn't download the attachment.")
+            }
         }
     }
+
+    private static let maximumAttachmentSize = 100 * 1024 * 1024
 }
 
 private struct StatusBanner: View {

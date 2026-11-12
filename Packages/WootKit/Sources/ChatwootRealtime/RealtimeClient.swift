@@ -25,7 +25,7 @@ public struct RealtimeClient: Sendable {
     static let silenceLimit = Duration.seconds(10)
     static let presenceInterval = Duration.seconds(20)
 
-    public init(server: URL, pubsubToken: String, accountID: Int, userID: Int, urlSession: URLSession = .shared) {
+    public init(server: URL, pubsubToken: String, accountID: Int, userID: Int, urlSession: URLSession = URLSession(configuration: .ephemeral)) {
         var components = URLComponents(url: server.appending(path: "cable"), resolvingAgainstBaseURL: false)!
         components.scheme = components.scheme == "http" ? "ws" : "wss"
         url = components.url!
@@ -38,7 +38,8 @@ public struct RealtimeClient: Sendable {
     }
 
     public func updates() -> AsyncStream<Update> {
-        AsyncStream(bufferingPolicy: .bufferingNewest(256)) { continuation in
+        // Unbounded: a dropped event would leave the UI stale with no reconnect to repair it.
+        AsyncStream(bufferingPolicy: .unbounded) { continuation in
             let task = Task {
                 await run(continuation)
                 continuation.finish()

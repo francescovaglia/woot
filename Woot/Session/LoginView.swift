@@ -29,6 +29,8 @@ struct LoginView: View {
                         .autocorrectionDisabled()
                         .focused($focus, equals: .server)
                         .accessibilityIdentifier("server")
+                        // The two-factor challenge belongs to this server.
+                        .disabled(twoFactorToken != nil)
                         .submitLabel(.next)
                         .onSubmit { focus = method == .password ? .email : .token }
                 } header: {
@@ -44,7 +46,14 @@ struct LoginView: View {
                     } header: {
                         Text("Two-factor code")
                     } footer: {
-                        Text("Enter the code from your authenticator app, or a backup code.")
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Enter the code from your authenticator app, or a backup code.")
+                            Button("Start over") {
+                                self.twoFactorToken = nil
+                                code = ""
+                            }
+                        }
+                        .font(.footnote)
                     }
                     .onAppear { focus = .code }
                     .id(twoFactorToken)
@@ -71,8 +80,6 @@ struct LoginView: View {
                 } else {
                     Section {
                         SecureField("Access token", text: $token)
-                            // Not a password: keeps iOS from offering to save it in Passwords.
-                            .textContentType(.oneTimeCode)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                             .focused($focus, equals: .token)

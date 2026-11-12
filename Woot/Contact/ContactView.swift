@@ -24,10 +24,10 @@ struct ContactView: View {
 
                 Section {
                     if let email = shown.email {
-                        LabeledLink("Email", value: email, url: URL(string: "mailto:\(email)"))
+                        LabeledLink("Email", value: email, url: Self.url(scheme: "mailto", path: email))
                     }
                     if let phone = shown.phoneNumber {
-                        LabeledLink("Phone", value: phone, url: URL(string: "tel:\(phone.filter { !$0.isWhitespace })"))
+                        LabeledLink("Phone", value: phone, url: Self.url(scheme: "tel", path: phone.filter { $0.isNumber || $0 == "+" }))
                     }
                     if let location = shown.location {
                         LabeledContent("Location") {
@@ -109,6 +109,14 @@ struct ContactView: View {
             }
         }
         .padding(.bottom, 8)
+    }
+
+    /// Builds `mailto:` and `tel:` links from contact data without letting it add query parameters.
+    private static func url(scheme: String, path: String) -> URL? {
+        var components = URLComponents()
+        components.scheme = scheme
+        components.path = path
+        return components.url
     }
 
     private func load() async {

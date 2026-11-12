@@ -7,6 +7,8 @@ public struct Message: Identifiable, Hashable, Sendable {
         /// System events such as "Conversation was resolved by Francesco".
         case activity = 2
         case template = 3
+        /// A type this version doesn't know; not rendered rather than guessed.
+        case unknown = -1
     }
 
     public enum Status: String, Sendable {
@@ -73,7 +75,7 @@ extension Message: Decodable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(Int.self, forKey: .id)
         conversationID = try container.decode(Int.self, forKey: .conversationID)
-        kind = try Kind(rawValue: container.decode(Int.self, forKey: .kind)) ?? .activity
+        kind = try Kind(rawValue: container.decode(Int.self, forKey: .kind)) ?? .unknown
         content = try container.decodeIfPresent(String.self, forKey: .content)
         isPrivate = try container.decodeIfPresent(Bool.self, forKey: .isPrivate) ?? false
         status = try container.decodeIfPresent(String.self, forKey: .status).flatMap(Status.init) ?? .sent
@@ -112,9 +114,14 @@ public struct Attachment: Identifiable, Hashable, Sendable {
         self.height = height
     }
 
-    /// The last path component of the file URL, which Active Storage keeps as the original name.
+    /// The original name, which Active Storage keeps as the last path component.
+    /// Comes from the server, so it is reduced to a safe single path component.
     public var fileName: String {
-        url?.lastPathComponent.removingPercentEncoding ?? "Attachment"
+        let decoded = url?.lastPathComponent.removingPercentEncoding ?? ""
+        let safe = decoded
+            .components(separatedBy: CharacterSet(charactersIn: "/\\:").union(.controlCharacters)).joined(separator: "-")
+            .trimmingCharacters(in: CharacterSet(charactersIn: ". "))
+        return safe.isEmpty ? "Attachment" : String(safe.prefix(120))
     }
 }
 

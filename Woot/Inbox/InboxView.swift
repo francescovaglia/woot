@@ -163,7 +163,6 @@ private struct StatusAction: View {
 }
 
 /// Opens a conversation by number: from the cache, from the loaded list, or from the server.
-/// Creating the store while rendering is safe because the cache returns the same one every time.
 struct ConversationScreen: View {
     @Environment(AccountStore.self) private var account
     let id: Int
@@ -171,24 +170,32 @@ struct ConversationScreen: View {
     @State private var error: ChatwootError?
 
     var body: some View {
-        if let store = store ?? account.cachedConversationStore(id: id) ?? account.inbox.conversation(id: id).map(account.conversationStore) {
-            ConversationView(store: store)
-        } else if let error {
-            ContentUnavailableView {
-                Label("Couldn't open conversation", systemImage: "exclamationmark.bubble")
-            } description: {
-                Text(error.localizedDescription)
-            }
-        } else {
-            ProgressView()
-                .task {
-                    do throws(ChatwootError) {
-                        let conversation = try await account.send(account.api.conversation(id))
-                        store = account.conversationStore(for: conversation)
-                    } catch {
-                        self.error = error
-                    }
+        Group {
+            if let store {
+                ConversationView(store: store)
+            } else if let error {
+                ContentUnavailableView {
+                    Label("Couldn't open conversation", systemImage: "exclamationmark.bubble")
+                } description: {
+                    Text(error.localizedDescription)
                 }
+            } else {
+                ProgressView()
+            }
+        }
+        .task(id: id) { await resolve() }
+    }
+
+    private func resolve() async {
+        if let cached = account.cachedConversationStore(id: id) ?? account.inbox.conversation(id: id).map(account.conversationStore) {
+            store = cached
+            return
+        }
+        do throws(ChatwootError) {
+            let conversation = try await account.send(account.api.conversation(id))
+            store = account.conversationStore(for: conversation)
+        } catch {
+            self.error = error
         }
     }
 }

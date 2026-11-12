@@ -10,7 +10,10 @@ struct MultipartForm {
     }
 
     mutating func append(_ name: String, file: OutgoingMessage.File) {
-        let fileName = file.fileName.replacingOccurrences(of: "\"", with: "")
+        // The name ends up inside a header, so anything that could break out of it goes.
+        let fileName = file.fileName.unicodeScalars
+            .filter { !CharacterSet.controlCharacters.contains($0) && $0 != "\"" && $0 != "\\" }
+            .map(String.init).joined()
         data.append("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(name)\"; filename=\"\(fileName)\"\r\n")
         data.append("Content-Type: \(file.mimeType)\r\n\r\n")
         data.append(file.data)

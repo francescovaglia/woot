@@ -79,7 +79,7 @@ final class InboxStore {
             try await account.send(account.api.setStatus(status, of: conversation.id))
             return true
         } catch {
-            upsert(conversation)
+            restore(\.status, to: conversation.status, unlessChangedFrom: status, in: updated)
             return false
         }
     }
@@ -89,7 +89,21 @@ final class InboxStore {
         var updated = conversation
         updated.unreadCount = max(1, conversation.unreadCount)
         upsert(updated)
-        try? await account.send(account.api.markUnread(conversation.id))
+        if (try? await account.send(account.api.markUnread(conversation.id))) == nil {
+            restore(\.unreadCount, to: conversation.unreadCount, unlessChangedFrom: updated.unreadCount, in: updated)
+        }
+    }
+
+    /// Rolls back one field of a failed optimistic change, leaving anything that arrived
+    /// meanwhile (a new message, another change to the same field) untouched.
+    /// `optimistic` is the conversation as changed, used when the change moved it out of the list.
+    private func restore<Value: Equatable>(
+        _ field: WritableKeyPath<Conversation, Value>, to old: Value, unlessChangedFrom value: Value, in optimistic: Conversation
+    ) {
+        var current = conversation(id: optimistic.id) ?? optimistic
+        guard current[keyPath: field] == value else { return }
+        current[keyPath: field] = old
+        upsert(current)
     }
 
     /// Clears the badge locally as soon as a conversation is opened.

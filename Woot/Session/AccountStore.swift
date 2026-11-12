@@ -52,7 +52,8 @@ final class AccountStore {
         do {
             return try await client.send(endpoint)
         } catch {
-            Logger.api.error("\(endpoint.method.rawValue) \(endpoint.path) failed: \(error)")
+            // Never the server's error text: it can echo message content back.
+            Logger.api.error("\(endpoint.method.rawValue, privacy: .public) \(endpoint.path, privacy: .private) failed: \(error.category, privacy: .public)")
             if error == .unauthorized { Task { await verifySession() } }
             throw error
         }
@@ -62,7 +63,21 @@ final class AccountStore {
         if let store = conversationStores[conversation.id] { return store }
         let store = ConversationStore(conversation: conversation, account: self)
         conversationStores[conversation.id] = store
+        evictIdleConversationStores()
         return store
+    }
+
+    /// Keeps memory flat in a long session: drops the least recently opened stores
+    /// that hold nothing the agent would lose.
+    private func evictIdleConversationStores() {
+        let limit = 20
+        guard conversationStores.count > limit else { return }
+        let idle = conversationStores.values
+            .filter { $0 !== openConversation && !$0.hasUnsavedWork }
+            .sorted { $0.lastOpenedAt < $1.lastOpenedAt }
+        for store in idle.prefix(conversationStores.count - limit) {
+            conversationStores[store.conversationID] = nil
+        }
     }
 
     func cachedConversationStore(id: Int) -> ConversationStore? {
@@ -98,7 +113,8 @@ final class AccountStore {
         do {
             try await send(api.setAvailability(availability))
         } catch {
-            self.availability = previous
+            // Roll back only if no newer choice has been made meanwhile.
+            if self.availability == availability { self.availability = previous }
         }
     }
 
@@ -152,6 +168,21 @@ final class AccountStore {
             inbox.apply(event)
             // Cached conversations that aren't on screen catch up with `reload()` when reopened.
             openConversation?.apply(event)
+        }
+    }
+}
+
+extension ChatwootError {
+    /// A label safe to log: no server-provided text.
+    var category: String {
+        switch self {
+        case .notChatwoot: "not-chatwoot"
+        case .invalidCredentials: "invalid-credentials"
+        case .unauthorized: "unauthorized"
+        case .server(let status, _): "server-\(status)"
+        case .offline: "offline"
+        case .transport(let code): "transport-\(code.rawValue)"
+        case .decoding: "decoding"
         }
     }
 }

@@ -86,7 +86,8 @@ final class NavigationStateTests: XCTestCase {
     private func snapshot(_ name: String) {
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = name
-        attachment.lifetime = .keepAlways
+        // Real inbox data: kept only to debug a failure, deleted when the test passes.
+        attachment.lifetime = .deleteOnSuccess
         add(attachment)
     }
 }
