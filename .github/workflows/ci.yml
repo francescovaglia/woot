@@ -21,3 +21,19 @@ jobs:
           xcodegen generate
           xcodebuild build -project Woot.xcodeproj -scheme Woot \
             -destination generic/platform=iOS CODE_SIGNING_ALLOWED=NO -quiet
+
+  relay:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Relay
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: Relay/package-lock.json
+      - run: npm ci
+      - run: npm run check
+      - run: npm test

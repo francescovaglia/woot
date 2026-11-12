@@ -55,7 +55,7 @@ Chatwoot ──Web Push, encrypted to the device──▶ woot-push ──▶ AP
 4. The extension decrypts it, then fetches the contact's name and message from your server.
 
 Apple only accepts pushes for an app signed with the APNs key of the team that ships it, so the
-App Store build uses our relay. The relay can't read what it carries, and its code is the
+official build uses our relay. The relay can't read what it carries, and its code is the
 Worker in `Relay/`.
 
 ### Run your own relay
