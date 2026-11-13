@@ -100,3 +100,33 @@ func fixture(_ name: String) throws -> Data {
         #expect(try api.searchConversations("x").decode(Data(#"{"payload":{}}"#.utf8)).isEmpty)
     }
 }
+
+struct TranscriptTests {
+    private func message(_ id: Int, _ kind: Message.Kind, _ text: String, isPrivate: Bool = false) -> Message {
+        Message(id: id, conversationID: 1, kind: kind, content: text, isPrivate: isPrivate, createdAt: Date(timeIntervalSince1970: TimeInterval(id)))
+    }
+
+    @Test func notesSentAsTheyAreAreHidden() {
+        let transcript = [
+            message(1, .incoming, "Can I export a PDF?"),
+            message(2, .outgoing, "Yes, from Reports.", isPrivate: true),
+            message(3, .outgoing, "Yes, from Reports.\n"),
+        ].hidingNotesSentVerbatim()
+        #expect(transcript.map(\.id) == [1, 3])
+    }
+
+    @Test func editedDraftsAndEarlierRepliesKeepTheNote() {
+        let edited = [
+            message(1, .outgoing, "Yes, from Reports.", isPrivate: true),
+            message(2, .outgoing, "Yes! Open Reports."),
+        ].hidingNotesSentVerbatim()
+        #expect(edited.map(\.id) == [1, 2])
+
+        // A note that repeats something already said is a new thought, not a used draft.
+        let repeated = [
+            message(1, .outgoing, "Thanks!"),
+            message(2, .outgoing, "Thanks!", isPrivate: true),
+        ].hidingNotesSentVerbatim()
+        #expect(repeated.map(\.id) == [1, 2])
+    }
+}

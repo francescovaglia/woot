@@ -77,7 +77,7 @@ struct ConversationView: View {
     }
 
     private var transcript: some View {
-        let messages = store.messages
+        let messages = store.messages.hidingNotesSentVerbatim()
         return ForEach(Array(messages.enumerated()), id: \.element.id) { index, message in
             let previous = index > 0 ? messages[index - 1] : nil
             if previous.map({ !Calendar.current.isDate($0.createdAt, inSameDayAs: message.createdAt) }) ?? true {

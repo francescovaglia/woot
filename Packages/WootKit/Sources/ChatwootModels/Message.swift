@@ -147,3 +147,19 @@ extension Attachment: Decodable {
         height = try container.decodeIfPresent(Int.self, forKey: .height)
     }
 }
+
+extension Array where Element == Message {
+    /// The transcript without private notes that were later sent word for word, such as an
+    /// AI draft used as is: the reply already shows the same text. Edited drafts stay.
+    public func hidingNotesSentVerbatim() -> [Message] {
+        var sent = Set<String>()
+        var shown: [Message] = []
+        for message in reversed() {
+            let text = message.text?.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let text, message.isPrivate, !message.isDeleted, message.attachments.isEmpty, sent.contains(text) { continue }
+            if let text, message.kind == .outgoing, !message.isPrivate { sent.insert(text) }
+            shown.append(message)
+        }
+        return shown.reversed()
+    }
+}

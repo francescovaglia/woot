@@ -17,7 +17,7 @@ struct MessageRow: View {
         case .activity:
             ActivityLine(text: message.text ?? "")
         case _ where message.isPrivate && !message.isDeleted:
-            NoteCard(message: message, onOpen: onOpen, onUseAsReply: onUseAsReply)
+            NoteBubble(message: message, onOpen: onOpen, onUseAsReply: onUseAsReply)
         default:
             Bubble(message: message, startsGroup: startsGroup, isSeen: isSeen, onOpen: onOpen)
         }
@@ -74,45 +74,38 @@ private struct Bubble: View {
     }
 }
 
-/// Private notes span the width so they never read as something the contact saw.
-private struct NoteCard: View {
+/// A private note sits on the agents' side like a reply, but in yellow and labelled,
+/// so it never reads as something the contact saw.
+private struct NoteBubble: View {
     let message: Message
     let onOpen: (Attachment) -> Void
     let onUseAsReply: (Message) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Label(message.sender.map { "Note by \($0.name)" } ?? String(localized: "Private note"), systemImage: "note.text")
-                    .font(.caption.weight(.semibold))
-                Spacer()
-                Text(message.createdAt, format: .dateTime.hour().minute())
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            if let text = message.text {
-                MarkdownText(text)
-            }
+        VStack(alignment: .trailing, spacing: 4) {
+            Label(message.sender.map { "Note by \($0.name)" } ?? String(localized: "Private note"), systemImage: "note.text")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 12)
             ForEach(message.attachments) { attachment in
                 AttachmentView(attachment: attachment, onOpen: onOpen)
             }
-            if message.text != nil {
+            if let text = message.text {
+                MarkdownText(text)
+                    .bubble(fill: Color.yellow.opacity(0.22))
+                    .overlay { RoundedRectangle(cornerRadius: 20).strokeBorder(.yellow.opacity(0.5)) }
+                    .contextMenu {
+                        Button("Copy", systemImage: "doc.on.doc") { UIPasteboard.general.string = text }
+                        Button("Use as Reply", systemImage: "arrowshape.turn.up.left") { onUseAsReply(message) }
+                    }
                 Button("Use as Reply", systemImage: "arrowshape.turn.up.left") { onUseAsReply(message) }
                     .font(.subheadline.weight(.medium))
                     .buttonStyle(.glass)
                     .controlSize(.small)
             }
         }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.yellow.opacity(0.18), in: .rect(cornerRadius: 16))
-        .overlay { RoundedRectangle(cornerRadius: 16).strokeBorder(.yellow.opacity(0.45)) }
-        .contextMenu {
-            if let text = message.text {
-                Button("Copy", systemImage: "doc.on.doc") { UIPasteboard.general.string = text }
-                Button("Use as Reply", systemImage: "arrowshape.turn.up.left") { onUseAsReply(message) }
-            }
-        }
+        .frame(maxWidth: .infinity, alignment: .trailing)
+        .padding(.leading, 48)
     }
 }
 
