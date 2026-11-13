@@ -5,6 +5,15 @@ Built with SwiftUI for iOS 27; the app has no third-party dependencies.
 
 Woot works with any Chatwoot server, self-hosted or cloud, from version 4.
 
+<p align="center">
+  <img src="docs/screenshots/inbox.png" width="200" alt="Inbox">
+  <img src="docs/screenshots/conversation.png" width="200" alt="Conversation with a drafted private note">
+  <img src="docs/screenshots/reply.png" width="200" alt="The note used as the reply">
+  <img src="docs/screenshots/contact.png" width="200" alt="Contact card">
+</p>
+
+<sub>Screenshots use invented people and data.</sub>
+
 ## Features
 
 - **Sign in** with email and password, two-factor authentication, or a personal access token.
