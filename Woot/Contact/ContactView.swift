@@ -102,7 +102,12 @@ struct ContactView: View {
             Text(shown.name)
                 .font(.title2.bold())
                 .multilineTextAlignment(.center)
-            if let lastActivity = shown.lastActivityAt {
+            // The last activity lags behind presence, so it would contradict the green dot.
+            if isOnline {
+                Text("Online")
+                    .font(.subheadline)
+                    .foregroundStyle(.green)
+            } else if let lastActivity = shown.lastActivityAt {
                 Text("Last seen \(lastActivity, format: .relative(presentation: .named))")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
