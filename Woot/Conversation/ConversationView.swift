@@ -88,7 +88,8 @@ struct ConversationView: View {
                 startsGroup: previous?.sender != message.sender || previous?.kind == .activity || previous?.isPrivate == true,
                 isSeen: message.id == lastSeenOutgoingID,
                 onOpen: open,
-                onUseAsReply: { store.useAsReply($0) }
+                onUseAsReply: { store.useAsReply($0) },
+                onDeleteNote: { note in Task { await store.deleteNote(note) } }
             )
         }
     }

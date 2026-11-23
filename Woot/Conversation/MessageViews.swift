@@ -9,6 +9,7 @@ struct MessageRow: View {
     let isSeen: Bool
     let onOpen: (Attachment) -> Void
     let onUseAsReply: (Message) -> Void
+    let onDeleteNote: (Message) -> Void
 
     var body: some View {
         switch message.kind {
@@ -16,8 +17,10 @@ struct MessageRow: View {
             EmptyView()
         case .activity:
             ActivityLine(text: message.text ?? "")
-        case _ where message.isPrivate && !message.isDeleted:
-            NoteBubble(message: message, onOpen: onOpen, onUseAsReply: onUseAsReply)
+        case _ where message.isPrivate && message.isDeleted:
+            EmptyView()  // a deleted note was never seen by the contact: nothing to show
+        case _ where message.isPrivate:
+            NoteBubble(message: message, onOpen: onOpen, onUseAsReply: onUseAsReply, onDelete: onDeleteNote)
         default:
             Bubble(message: message, startsGroup: startsGroup, isSeen: isSeen, onOpen: onOpen)
         }
@@ -80,6 +83,7 @@ private struct NoteBubble: View {
     let message: Message
     let onOpen: (Attachment) -> Void
     let onUseAsReply: (Message) -> Void
+    let onDelete: (Message) -> Void
 
     var body: some View {
         VStack(alignment: .trailing, spacing: 4) {
@@ -97,6 +101,7 @@ private struct NoteBubble: View {
                     .contextMenu {
                         Button("Copy", systemImage: "doc.on.doc") { UIPasteboard.general.string = text }
                         Button("Use as Reply", systemImage: "arrowshape.turn.up.left") { onUseAsReply(message) }
+                        Button("Delete Note", systemImage: "trash", role: .destructive) { onDelete(message) }
                     }
                 Button("Use as Reply", systemImage: "arrowshape.turn.up.left") { onUseAsReply(message) }
                     .font(.subheadline.weight(.medium))

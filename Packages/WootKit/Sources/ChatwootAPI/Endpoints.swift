@@ -204,6 +204,11 @@ public struct AccountAPI: Sendable {
         return Endpoint(.post, path, body: form.body)
     }
 
+    /// Chatwoot keeps the row and blanks it (`content_attributes.deleted`), announcing it as `message.updated`.
+    public func deleteMessage(_ messageID: Int, in conversationID: Int) -> Endpoint<Void> {
+        Endpoint(.delete, "\(base)/conversations/\(conversationID)/messages/\(messageID)")
+    }
+
     public func setStatus(_ status: Conversation.Status, of conversationID: Int) -> Endpoint<Void> {
         Endpoint(.post, "\(base)/conversations/\(conversationID)/toggle_status", body: .json(["status": status.rawValue]))
     }

@@ -156,6 +156,17 @@ final class ConversationStore {
         mode = .reply
     }
 
+    /// Removes a private note (an AI draft that won't be used). Hidden at once, back if the server says no.
+    func deleteNote(_ note: Message) async {
+        guard let account, note.isPrivate, let index = messages.firstIndex(where: { $0.id == note.id }) else { return }
+        messages.remove(at: index)
+        do {
+            try await account.send(account.api.deleteMessage(note.id, in: conversationID))
+        } catch {
+            merge([note])
+        }
+    }
+
     func setStatus(_ status: Conversation.Status) async {
         guard let account else { return }
         let previous = conversation

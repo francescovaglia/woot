@@ -70,6 +70,12 @@ import Testing
         #expect(ChatwootClient.normalizedServerURL(input)?.absoluteString == expected)
     }
 
+    @Test func deleteMessageHitsTheMessage() {
+        let request = api.deleteMessage(42, in: 9).urlRequest(server: server, headers: [:])
+        #expect(request.httpMethod == "DELETE")
+        #expect(request.url?.path == "/api/v1/accounts/7/conversations/9/messages/42")
+    }
+
     @Test(arguments: ["", "not a host", "https://", "http://chat.example.com", "ftp://chat.example.com", "https://user:pass@chat.example.com"])
     func invalidServerURLs(input: String) {
         #expect(ChatwootClient.normalizedServerURL(input) == nil)
