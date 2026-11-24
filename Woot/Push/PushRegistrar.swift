@@ -11,8 +11,8 @@ import UserNotifications
 final class PushRegistrar {
     /// The relay's base URL. Empty in builds without one, which turns push off.
     static let relay = (Bundle.main.object(forInfoDictionaryKey: "WootPushRelay") as? String).flatMap { URL(string: $0) }.flatMap { $0.host() == nil ? nil : $0 }
-    /// `development` for debug builds, whose tokens only work with the APNs sandbox.
-    static let environment = Bundle.main.object(forInfoDictionaryKey: "WootAPSEnvironment") as? String ?? "production"
+    /// Sandbox or production, from the profile the app is signed with (see `APSEnvironment`).
+    static let environment = APSEnvironment.current
 
     weak var sessions: SessionStore?
     /// iOS can deliver the same token more than once; registering it twice in parallel

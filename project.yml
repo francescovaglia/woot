@@ -36,7 +36,6 @@ targets:
       properties:
         WootKeychainGroup: $(AppIdentifierPrefix)$(WOOT_BUNDLE_ID).shared
         WootPushRelay: $(WOOT_PUSH_RELAY)
-        WootAPSEnvironment: $(WOOT_APS_ENVIRONMENT)
     entitlements:
       path: Woot/Woot.entitlements
       properties:
