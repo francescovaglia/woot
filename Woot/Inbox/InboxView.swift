@@ -23,7 +23,9 @@ struct InboxView: View {
             .toolbar { toolbar }
             .searchable(text: $search.query, prompt: "Name, email or message")
             .navigationDestination(for: Int.self) { id in
-                ConversationScreen(id: id)
+                // Replacing the path in place (a tapped notification) reuses the destination view:
+                // without a new identity its state and `.task` stay on the previous conversation.
+                ConversationScreen(id: id).id(id)
             }
             .sheet(isPresented: $showsSettings) { SettingsView() }
         }
